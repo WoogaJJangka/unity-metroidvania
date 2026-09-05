@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d1654f89e9918954092376e8d1a730a5, type: 3}
+  m_Name: MovementConfig
+  m_EditorClassIdentifier: Assembly-CSharp::Game.Player.MovementConfig
+  maxSpeed: 9
+  groundAccel: 90
+  groundDecel: 110
+  airAccel: 60
+  airDecel: 40
+  turnAccelMultiplier: 2
+  jumpHeight: 3.2
+  timeToApex: 0.38
+  fallGravityMultiplier: 1.8
+  jumpCutMultiplier: 0.5
+  apexThreshold: 2.5
+  apexGravityMultiplier: 0.5
+  apexBonusSpeed: 1.5
+  maxFallSpeed: 22
+  coyoteTime: 0.1
+  jumpBufferTime: 0.15
+  groundCheckSize: {x: 0.45, y: 0.12}
+  groundCheckOffset: 0.02
+  cornerCorrectionDistance: 0.25
