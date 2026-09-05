@@ -19,8 +19,8 @@ MonoBehaviour:
   airDecel: 40
   turnAccelMultiplier: 2
   jumpHeight: 3.2
-  timeToApex: 0.38
-  fallGravityMultiplier: 1.8
+  timeToApex: 0.28
+  timeToFall: 0.2832
   jumpCutMultiplier: 0.5
   apexThreshold: 2.5
   apexGravityMultiplier: 0.5
@@ -30,4 +30,5 @@ MonoBehaviour:
   jumpBufferTime: 0.15
   groundCheckSize: {x: 0.45, y: 0.12}
   groundCheckOffset: 0.02
+  groundStickSpeed: 2
   cornerCorrectionDistance: 0.25

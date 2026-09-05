@@ -34,12 +34,15 @@ namespace Game.Player
         [Tooltip("최대 점프 높이 (units). 중력과 점프 속도는 이 값에서 자동 계산된다")]
         public float jumpHeight = 3.2f;
 
-        [Tooltip("최고점까지 걸리는 시간 (sec). 작을수록 민첩하고 클수록 붕 뜬 느낌")]
-        public float timeToApex = 0.38f;
+        [Tooltip("최고점까지 올라가는 시간 (sec). 작을수록 튀어오르듯 민첩해진다")]
+        public float timeToApex = 0.28f;
+
+        [Tooltip("최고점에서 원래 높이까지 떨어지는 시간 (sec). " +
+                 "상승 시간과 독립적이므로 한쪽만 바꿔도 다른 쪽은 그대로 유지된다. " +
+                 "이 값이 timeToApex보다 작으면 '빨리 떨어지는' 경쾌한 점프가 된다")]
+        public float timeToFall = 0.283f;
 
         [Header("점프 감각 보정")]
-        [Tooltip("하강 시 중력 배수. 1보다 크면 올라갈 때보다 빨리 떨어져 경쾌해진다")]
-        public float fallGravityMultiplier = 1.8f;
 
         [Tooltip("점프 버튼을 일찍 떼면 상승 속도에 곱하는 값. 작을수록 짧은 점프가 잘 된다")]
         [Range(0f, 1f)]
@@ -83,10 +86,16 @@ namespace Game.Player
         // C#의 '식 본문 속성(expression-bodied property)': 저장되는 필드가 아니라
         // 읽을 때마다 계산되는 값이다. C의 매크로 함수와 비슷하다고 보면 된다.
 
-        /// <summary>중력 가속도(양수). h = ½·g·t² 를 g에 대해 푼 값.</summary>
+        /// <summary>상승 구간 중력 가속도(양수). h = ½·g·t² 를 g에 대해 푼 값.</summary>
         public float Gravity => (2f * jumpHeight) / (timeToApex * timeToApex);
 
         /// <summary>점프 시작 속도. v = g·t.</summary>
         public float JumpVelocity => Gravity * timeToApex;
+
+        /// <summary>
+        /// 하강 구간 중력 가속도. 상승과 같은 공식이지만 timeToFall로 계산하므로
+        /// 상승 속도를 바꿔도 낙하 속도는 영향을 받지 않는다.
+        /// </summary>
+        public float FallGravity => (2f * jumpHeight) / (timeToFall * timeToFall);
     }
 }

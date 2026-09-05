@@ -21,6 +21,7 @@ namespace Game.Player
         // C#에서 private 필드는 관례상 _로 시작한다 (CLAUDE.md 규칙).
         private Rigidbody2D _rb;
         private CapsuleCollider2D _collider;
+        private InputActionAsset _actionsInstance;   // 이 컴포넌트 전용 복사본
         private InputActionMap _playerMap;
         private InputAction _moveAction;
         private InputAction _jumpAction;
@@ -47,14 +48,27 @@ namespace Game.Player
             _rb.interpolation = RigidbodyInterpolation2D.Interpolate;
             _rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
+            // 에셋을 그대로 쓰면 안 된다.
+            // InputSystem_Actions는 프로젝트 전역 입력 에셋이라 Unity가 스스로 켜고 끄는데,
+            // 여기서 같은 객체를 또 Enable/Disable하면 두 주체가 같은 내부 상태를 건드려
+            // "Map must be contained in state" 류의 오류와 함께 입력 처리 전체가 죽는다.
+            // 그래서 이 컴포넌트 전용 복사본을 만들어 쓴다.
+            _actionsInstance = Instantiate(inputActions);
+
             // 두 번째 인자 true = 못 찾으면 예외를 던진다. 오타를 조용히 넘기지 않기 위함.
-            _playerMap = inputActions.FindActionMap("Player", true);
+            _playerMap = _actionsInstance.FindActionMap("Player", true);
             _moveAction = _playerMap.FindAction("Move", true);
             _jumpAction = _playerMap.FindAction("Jump", true);
         }
 
-        private void OnEnable() => _playerMap.Enable();
-        private void OnDisable() => _playerMap.Disable();
+        private void OnEnable() => _playerMap?.Enable();
+        private void OnDisable() => _playerMap?.Disable();
+
+        private void OnDestroy()
+        {
+            // 복사본은 우리가 만들었으니 우리가 치운다. 안 그러면 플레이할 때마다 쌓인다.
+            if (_actionsInstance != null) Destroy(_actionsInstance);
+        }
 
         // 입력은 Update에서 읽는다. FixedUpdate는 프레임마다 돌지 않아 입력을 놓칠 수 있다.
         private void Update()
@@ -163,11 +177,15 @@ namespace Game.Player
                 return;
             }
 
-            float g = config.Gravity;
+            // 상승 / 정점 / 하강에 각각 다른 중력을 쓴다.
+            // 하강 중력은 상승과 독립적으로 계산되므로 한쪽만 튜닝해도 다른 쪽이 안 흔들린다.
+            float g;
             if (IsNearApex())
-                g *= config.apexGravityMultiplier;          // 정점 체공
+                g = config.Gravity * config.apexGravityMultiplier;   // 정점 체공
             else if (_rb.linearVelocity.y < 0f)
-                g *= config.fallGravityMultiplier;          // 하강은 빠르게
+                g = config.FallGravity;                              // 하강
+            else
+                g = config.Gravity;                                  // 상승
 
             float vy = _rb.linearVelocity.y - g * Time.fixedDeltaTime;
             vy = Mathf.Max(vy, -config.maxFallSpeed);
