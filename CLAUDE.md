@@ -46,9 +46,14 @@ Assets/
 - 세이브 직렬화·퀘스트 상태 전이처럼 물리와 무관한 로직은 Unity Test Framework(EditMode)로 테스트한다.
 - 각 Phase 완료 시 git 태그를 남긴다 (`phase-1-movement` 등).
 
+## 저장소
+- 원격: https://github.com/WoogaJJangka/unity-metroidvania (Public)
+- `main`은 항상 동작하는 상태를 유지한다. 작업은 `feature/*` 브랜치에서 하고 완료 후 `main`에 병합한다.
+- 커밋 이메일은 `49576850+WoogaJJangka@users.noreply.github.com` (공개 저장소이므로 실제 이메일을 쓰지 않는다). 저장소 로컬 설정에 이미 지정되어 있다.
+
 ## 현재 상태
-- **Phase 0 (환경 준비) 진행 중** — 프로젝트 생성·git·폴더 구조 완료
-- 다음: Phase 1 조작감 수직 슬라이스 (PlayerController + MovementConfig + Cinemachine)
+- **Phase 0 (환경 준비) 완료** — 태그 `phase-0-setup`. 프로젝트 생성·git·GitHub 연동·MCP 연결까지 검증 완료
+- **Phase 1 진행 예정** — 브랜치 `feature/movement`. PlayerController + MovementConfig + Cinemachine
 
 ## 툴체인 (Unity CLI)
 `C:\Users\siwon\AppData\Local\Unity\bin\unity.exe` (사용자 PATH에 등록됨). Hub GUI 없이 대부분을 자동화할 수 있다.
