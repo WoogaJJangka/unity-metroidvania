@@ -51,9 +51,26 @@ Assets/
 - `main`은 항상 동작하는 상태를 유지한다. 작업은 `feature/*` 브랜치에서 하고 완료 후 `main`에 병합한다.
 - 커밋 이메일은 `49576850+WoogaJJangka@users.noreply.github.com` (공개 저장소이므로 실제 이메일을 쓰지 않는다). 저장소 로컬 설정에 이미 지정되어 있다.
 
-## 현재 상태
-- **Phase 0 (환경 준비) 완료** — 태그 `phase-0-setup`. 프로젝트 생성·git·GitHub 연동·MCP 연결까지 검증 완료
-- **Phase 1 진행 예정** — 브랜치 `feature/movement`. PlayerController + MovementConfig + Cinemachine
+## 현재 상태 (2026-09-05 기준)
+- **Phase 0 (환경 준비) 완료** — 태그 `phase-0-setup`
+- **Phase 1 (조작감) 진행 중** — 브랜치 `feature/movement`, 마지막 커밋 `68a015a`
+
+### Phase 1에서 끝난 것
+- `PlayerController` + `MovementConfig` — 가변 점프, 코요테 타임, 점프 버퍼, 정점 체공, 모서리 보정, 방향 전환 가속
+- 테스트 맵 `Assets/_Project/Scenes/Maps/TestBox.unity` (점프 거리·높이·천장 틈 시험 구간)
+- Cinemachine 3 카메라 (데드존·룩어헤드·댐핑)
+- **점프 감각 튜닝 완료** — 사용자 확인 받음. 상승 `timeToApex=0.28`, 낙하 `timeToFall=0.2832` (독립 파라미터)
+
+### Phase 1에서 남은 것
+- 수평 이동 감각 튜닝 (`maxSpeed`, `groundAccel`/`airAccel` 등) — 아직 사용자 확인 안 받음
+- 모서리 보정·코요테 타임의 실제 체감 확인 (코드는 있으나 플레이로 검증 안 함)
+- 애니메이션 상태 전환 (Idle / Run / Jump / Fall / Land) — 미착수
+- `CinemachineConfiner2D`로 카메라 이동 범위 제한 — 미착수
+
+### 오늘 겪은 것 (반복하지 말 것)
+- **입력 에셋을 그대로 Enable/Disable 하면 안 된다.** `InputSystem_Actions`는 프로젝트 전역 에셋이라 Unity가 스스로 관리하는데, 컴포넌트에서 같은 객체를 또 켜고 끄면 `Map must be contained in state` 오류와 함께 입력이 죽고 플레이 모드가 스스로 종료된다. `Instantiate()`로 전용 복사본을 만들어 쓸 것 (`PlayerController.Awake` 참고).
+- 물리 틱은 50Hz → **100Hz**로 올려둠 (`ProjectSettings/TimeManager.asset`). Unity 6.6에서 이 값은 float이 아니라 `Fixed Timestep.m_Count / 141120000` 형태의 유리수라 인스펙터 밖에서 바꾸려면 `m_Count`를 조정해야 한다.
+- 이산 적분 오차 때문에 실제 최고 도달 높이는 `jumpHeight`보다 약 0.1 낮다. 3유닛 계단은 문제없이 넘으므로 지금은 보정하지 않음.
 
 ## 툴체인 (Unity CLI)
 `C:\Users\siwon\AppData\Local\Unity\bin\unity.exe` (사용자 PATH에 등록됨). Hub GUI 없이 대부분을 자동화할 수 있다.
