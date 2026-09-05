@@ -49,3 +49,21 @@ Assets/
 ## 현재 상태
 - **Phase 0 (환경 준비) 진행 중** — 프로젝트 생성·git·폴더 구조 완료
 - 다음: Phase 1 조작감 수직 슬라이스 (PlayerController + MovementConfig + Cinemachine)
+
+## 툴체인 (Unity CLI)
+`C:\Users\siwon\AppData\Local\Unity\bin\unity.exe` (사용자 PATH에 등록됨). Hub GUI 없이 대부분을 자동화할 수 있다.
+
+| 목적 | 명령 |
+|---|---|
+| 실행 중 에디터 상태 | `unity status` |
+| 에디터가 노출한 툴 목록 | `unity list --project-path <경로>` |
+| C# 즉시 실행 (도메인 리로드 없음, 200~600ms) | `unity command eval "return Application.unityVersion;"` |
+| 프로젝트 열기 | `unity open <경로>` |
+| 테스트 실행 | `unity test <경로>` |
+| 빌드 | `unity build <경로>` |
+
+**주의사항 (실제로 겪은 것)**
+- 에디터를 **백그라운드 Bash 작업으로 띄우면 안 된다.** 작업이 끝나면 자식 프로세스인 에디터까지 함께 죽는다. PowerShell `Start-Process`로 세션과 분리해 띄울 것.
+- `Packages/manifest.json`을 바꾼 뒤에는 **에디터를 재시작**해야 반영된다. 부팅 중에 바꾸면 무시된다.
+- Git Bash에서 `tasklist /FI "IMAGENAME eq ..."` 필터는 오작동한다. 프로세스 확인은 `tasklist | grep` 형태로 하고 `head`로 자르지 말 것 (Unity Hub.exe 항목이 여러 개라 Unity.exe 행이 잘려 나간다).
+- MCP가 에디터에 붙으려면 `com.unity.pipeline` 패키지가 필요하다 (`unity pipeline install --project-path <경로>`).
