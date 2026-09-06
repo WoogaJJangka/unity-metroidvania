@@ -56,7 +56,11 @@ Assets/
 - **Phase 1 (조작감) 완료** — 태그 `phase-1-movement`. 점프·수평 이동 모두 사용자 확인 받음.
   최종값: `maxSpeed 9`, `groundAccel 110`, `groundDecel 60`, `airAccel 100`, `airDecel 40`,
   `timeToApex 0.28`, `timeToFall 0.2832`, `apexBonusSpeed 0`
-- **Phase 2 (타일맵과 맵 전환) 진행 중** — 브랜치 `feature/world`
+- **Phase 2 (맵 전환) 진행 중** — 브랜치 `feature/world`
+  - ✅ 맵 전환 코어 완료: `GameManager`(자체 생성 + 페이드 + 비동기 로드), `Portal`, `SpawnPoint`.
+    A↔B 왕복과 스폰 위치 복원을 Play 모드로 실측 검증
+  - ⏸ **타일맵 보류** — 타일 아트가 없어 룰 타일을 지금 세팅해도 쓸 데가 없다. Kenney 에셋 도입 시 착수
+  - ⏸ **Sorting Layer 보류** — 스프라이트가 전부 `Default` 하나뿐. 배경 아트 생기면 정한다
 
 ### Phase 1에서 끝난 것
 - `PlayerController` + `MovementConfig` — 가변 점프, 코요테 타임, 점프 버퍼, 정점 체공, 모서리 보정, 방향 전환 가속

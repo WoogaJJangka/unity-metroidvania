@@ -11,5 +11,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_Project/Scenes/Maps/TestBox.unity
     guid: 23e1de2e10f237d43a209abb61ae04d3
+  - enabled: 1
+    path: Assets/_Project/Scenes/Maps/TestBoxB.unity
+    guid: 6a0594ee9d0cee741a4ce546cff8d5a4
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
