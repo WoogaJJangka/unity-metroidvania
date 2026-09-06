@@ -209,7 +209,10 @@ namespace Game.Player
 
             Bounds b = _collider.bounds;
             const float inset = 0.03f;   // 모서리에서 살짝 안쪽에서 쏜다
-            const float probeUp = 0.08f;
+            // 이번 물리 스텝에 실제로 올라갈 거리만큼은 미리 봐야 한다.
+            // 고정값(0.08)만 쓰면 점프 속도가 빠를 때 한 스텝에 0.2 이상 올라가면서
+            // 탐지 구간을 통째로 건너뛰고 그냥 천장에 박는다.
+            float probeUp = Mathf.Max(0.08f, _rb.linearVelocity.y * Time.fixedDeltaTime + 0.02f);
 
             Vector2 leftTop = new Vector2(b.min.x + inset, b.max.y);
             Vector2 rightTop = new Vector2(b.max.x - inset, b.max.y);

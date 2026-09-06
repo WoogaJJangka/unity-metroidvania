@@ -61,16 +61,22 @@ Assets/
 - Cinemachine 3 카메라 (데드존·룩어헤드·댐핑)
 - **점프 감각 튜닝 완료** — 사용자 확인 받음. 상승 `timeToApex=0.28`, 낙하 `timeToFall=0.2832` (독립 파라미터)
 
+- **보조 기능 3종 Play 모드 실측 검증 완료** (2026-09-06)
+  - 코요테 타임: 발판을 벗어난 공중 상태에서 남은 0.1로 점프 발동 확인
+  - 점프 버퍼: 낙하 중 입력이 착지 순간 발동(`vy` 0 → +22.04) 확인
+  - 모서리 보정: 천장 틈 왼쪽 모서리에서 x가 33.200 → 33.380으로 밀려 통과 확인
+
 ### Phase 1에서 남은 것
-- 수평 이동 감각 튜닝 (`maxSpeed`, `groundAccel`/`airAccel` 등) — 아직 사용자 확인 안 받음
-- 모서리 보정·코요테 타임의 실제 체감 확인 (코드는 있으나 플레이로 검증 안 함)
-- 애니메이션 상태 전환 (Idle / Run / Jump / Fall / Land) — 미착수
-- `CinemachineConfiner2D`로 카메라 이동 범위 제한 — 미착수
+- 수평 이동 감각 튜닝 (`maxSpeed`, `groundAccel`/`airAccel` 등) — **사용자 확인 필요**. Phase 1 완료 게이트.
+- 애니메이션 상태 전환 — **보류**. 스프라이트가 흰 사각형뿐이라 지금 Animator를 짜면 버릴 코드가 된다. 실제 캐릭터 아트가 생긴 뒤에 착수.
+- `CinemachineConfiner2D` — **보류**. 테스트 맵은 회색 박스라 카메라가 경계를 넘어가도 문제가 없다. 실제 맵을 만드는 Phase 2에서 함께.
 
 ### 오늘 겪은 것 (반복하지 말 것)
 - **입력 에셋을 그대로 Enable/Disable 하면 안 된다.** `InputSystem_Actions`는 프로젝트 전역 에셋이라 Unity가 스스로 관리하는데, 컴포넌트에서 같은 객체를 또 켜고 끄면 `Map must be contained in state` 오류와 함께 입력이 죽고 플레이 모드가 스스로 종료된다. `Instantiate()`로 전용 복사본을 만들어 쓸 것 (`PlayerController.Awake` 참고).
 - 물리 틱은 50Hz → **100Hz**로 올려둠 (`ProjectSettings/TimeManager.asset`). Unity 6.6에서 이 값은 float이 아니라 `Fixed Timestep.m_Count / 141120000` 형태의 유리수라 인스펙터 밖에서 바꾸려면 `m_Count`를 조정해야 한다.
 - 이산 적분 오차 때문에 실제 최고 도달 높이는 `jumpHeight`보다 약 0.1 낮다. 3유닛 계단은 문제없이 넘으므로 지금은 보정하지 않음.
+- **에디터 창이 백그라운드면 Play 모드 프레임이 멈춘다.** `playing=True`인데 `Time.frameCount`가 고정되면 이것이다(플레이 모드가 종료된 게 아니다). `runInBackground`를 켜서 해결했고, 이 값은 부팅 시 읽히므로 **에디터 재시작이 필요**하다. `PlayerSettings.runInBackground = true`는 디스크에 안 써지니 `Unsupported.GetSerializedAssetInterfaceSingleton("PlayerSettings")` + SerializedObject로 쓸 것.
+- 레이캐스트로 뭔가를 감지할 때 **탐지 거리는 한 물리 스텝의 이동량보다 커야 한다.** 고정 거리를 쓰면 빠를 때 구간을 건너뛴다 (`CorrectCorner`의 `probeUp` 참고).
 
 ## 툴체인 (Unity CLI)
 `C:\Users\siwon\AppData\Local\Unity\bin\unity.exe` (사용자 PATH에 등록됨). Hub GUI 없이 대부분을 자동화할 수 있다.
@@ -88,4 +94,5 @@ Assets/
 - 에디터를 **백그라운드 Bash 작업으로 띄우면 안 된다.** 작업이 끝나면 자식 프로세스인 에디터까지 함께 죽는다. PowerShell `Start-Process`로 세션과 분리해 띄울 것.
 - `Packages/manifest.json`을 바꾼 뒤에는 **에디터를 재시작**해야 반영된다. 부팅 중에 바꾸면 무시된다.
 - Git Bash에서 `tasklist /FI "IMAGENAME eq ..."` 필터는 오작동한다. 프로세스 확인은 `tasklist | grep` 형태로 하고 `head`로 자르지 말 것 (Unity Hub.exe 항목이 여러 개라 Unity.exe 행이 잘려 나간다).
+- **CLI 바이너리도 이름이 `Unity.exe`다.** 프로세스 이름만으로 에디터를 찾으면 `unity mcp`/`unity status` 프로세스가 잡혀 "에디터가 떠 있다"고 오판한다. 실행 경로로 걸러야 한다: `Get-CimInstance Win32_Process -Filter "Name='Unity.exe'" | Where-Object { $_.ExecutablePath -like "*Hub\Editor*" }`. 가장 확실한 판정은 `unity status`가 `ready`를 반환하는지 보는 것.
 - MCP가 에디터에 붙으려면 `com.unity.pipeline` 패키지가 필요하다 (`unity pipeline install --project-path <경로>`).
