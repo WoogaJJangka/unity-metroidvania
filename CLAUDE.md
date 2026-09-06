@@ -51,9 +51,12 @@ Assets/
 - `main`은 항상 동작하는 상태를 유지한다. 작업은 `feature/*` 브랜치에서 하고 완료 후 `main`에 병합한다.
 - 커밋 이메일은 `49576850+WoogaJJangka@users.noreply.github.com` (공개 저장소이므로 실제 이메일을 쓰지 않는다). 저장소 로컬 설정에 이미 지정되어 있다.
 
-## 현재 상태 (2026-09-05 기준)
+## 현재 상태 (2026-09-06 기준)
 - **Phase 0 (환경 준비) 완료** — 태그 `phase-0-setup`
-- **Phase 1 (조작감) 진행 중** — 브랜치 `feature/movement`, 마지막 커밋 `68a015a`
+- **Phase 1 (조작감) 완료** — 태그 `phase-1-movement`. 점프·수평 이동 모두 사용자 확인 받음.
+  최종값: `maxSpeed 9`, `groundAccel 110`, `groundDecel 60`, `airAccel 100`, `airDecel 40`,
+  `timeToApex 0.28`, `timeToFall 0.2832`, `apexBonusSpeed 0`
+- **Phase 2 (타일맵과 맵 전환) 진행 중** — 브랜치 `feature/world`
 
 ### Phase 1에서 끝난 것
 - `PlayerController` + `MovementConfig` — 가변 점프, 코요테 타임, 점프 버퍼, 정점 체공, 모서리 보정, 방향 전환 가속
