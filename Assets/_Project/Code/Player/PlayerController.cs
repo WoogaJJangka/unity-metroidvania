@@ -51,6 +51,16 @@ namespace Game.Player
         public Vector2 Velocity => _rb.linearVelocity;
         public bool IsDashing => _isSliding;
 
+        /// <summary>마지막으로 바라본 방향 (+1 오른쪽 / -1 왼쪽). 공격 방향이 이 값을 쓴다.</summary>
+        public float Facing => _facing;
+
+        /// <summary>
+        /// 이 컴포넌트가 만든 입력 복사본의 Player 맵.
+        /// 같은 오브젝트의 다른 컴포넌트(PlayerAttack 등)는 입력 에셋을 또 Instantiate하지 말고
+        /// 이 맵에서 액션을 찾아 써야 한다. 복사본이 둘이 되면 한쪽만 Enable된 채로 남는다.
+        /// </summary>
+        public InputActionMap PlayerMap => _playerMap;
+
         private void Awake()
         {
             // GetComponent는 비싸므로 Awake에서 한 번만 캐싱한다 (CLAUDE.md 규칙).

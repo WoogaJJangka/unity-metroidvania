@@ -85,6 +85,21 @@ Assets/
     32° 오르막 `vx 9.000 / vy +5.625` 손실 0, 40° 내리막 슬라이드가 정확히 25.667로 수렴
     (= `9 + 0.833 x 20`), `maxSlopeAngle`을 30으로 낮추면 40° 램프가 평지 취급되고 `vx`는 9를 안 넘음
 
+- **Phase 3 (전투 코어) 진행 중** — 브랜치 `feature/world`
+  - ✅ **때리는 쪽 완료** — Play 모드 실측 검증. `IDamageable`/`DamageInfo`, `Health`, `Hitbox`,
+    `Hitstop`, `PlayerAttack` + `AttackConfig`/`CombatConfig`
+  - 입력은 템플릿에 이미 있던 `Attack`(마우스 좌클릭 / 게임패드 X / Enter) 재사용. 새 액션 안 만듦
+  - 입력 에셋을 또 `Instantiate`하지 않는다. `PlayerController.PlayerMap`으로 같은 복사본을 공유한다.
+    복사본이 둘이 되면 한쪽만 Enable된 채 남는다
+  - 히트박스는 **레이어로 거른다.** 누가 누구를 때리는지는 코드가 아니라 Physics2D 충돌 매트릭스가 정한다
+    (`PlayerHitbox x Enemy`, `EnemyHitbox x Player`만 열려 있고 나머지는 전부 닫힘)
+  - `Hitbox`는 `OnTriggerEnter2D`와 `OnTriggerStay2D`를 **둘 다** 받는다. Enter만 쓰면 켜지는 순간
+    이미 겹쳐 있던 대상을 놓치고, Stay만 쓰면 상대 Rigidbody2D가 잠들었을 때 호출이 끊긴다.
+    중복은 `_hitThisSwing` HashSet이 막는다 (한 번 휘두르기에 한 대상 한 번)
+  - 실측: 넉백 1.200u (예측 `kbSpeed²/(2·decay)` = 1.25), 3타에 사망, 한 번의 타격에서
+    `timeScale` 최저 0.000(히트스톱)과 카메라 이탈 0.347u(화면 흔들림)를 동시에 확인
+  - ⏸ **맞는 쪽 미구현** — 플레이어 `Health`, 접촉 피해, 적 AI(FSM)는 다음 조각
+
 ### Phase 1에서 끝난 것
 - `PlayerController` + `MovementConfig` — 가변 점프, 코요테 타임, 점프 버퍼, 정점 체공, 모서리 보정, 방향 전환 가속
 - 테스트 맵 `Assets/_Project/Scenes/Maps/TestBox.unity` (점프 거리·높이·천장 틈 시험 구간)
@@ -102,6 +117,16 @@ Assets/
 - `CinemachineConfiner2D` — **보류**. 테스트 맵은 회색 박스라 카메라가 경계를 넘어가도 문제가 없다. 실제 맵을 만드는 Phase 2에서 함께.
 
 ### 오늘 겪은 것 (반복하지 말 것)
+- **넉백은 속도를 대입하고 끝내면 안 된다.** 깎아주는 주체가 없으면 받은 속도를 그대로 안고
+  계속 날아간다 — 한 대 맞은 허수아비가 15유닛을 날아가 맵 밖으로 떨어졌다. `Health.FixedUpdate`가
+  수평 속도를 `knockbackDecay`로 0까지 깎는다. **지속 시간을 따로 두지 않는다** — 속도가 0이 될
+  때까지만 깎으면 "세게 맞으면 오래 밀린다"가 저절로 성립하고, 시간과 감속을 따로 맞출 일이 없다.
+- **`unity command eval`의 CLI 왕복은 2초를 넘는다.** 짧은 현상(히트스톱 0.06초)을 eval 두 번으로
+  나눠 관측하려 하면 이미 끝난 뒤라 "발동 안 함"으로 오판한다. 실제로 히트스톱이 멀쩡한데
+  `timeScale=1`로 읽혀 한참을 헤맸다. **게임 안에서 코루틴 프로브를 돌려 `PlayerPrefs`에 기록하고
+  나중에 읽을 것.** (`Time.realtimeSinceStartup` 측정 결과 요청 2.000초 → 실제 2.003초)
+- **적을 죽여놓고 다음 검증을 하지 말 것.** 허수아비 2기가 이미 파괴된 줄 모르고 히트스톱을
+  측정해서 "허공을 친" 결과를 놓고 원인을 찾았다. 검증 전에 대상이 살아 있는지부터 확인한다.
 - **입력 에셋을 그대로 Enable/Disable 하면 안 된다.** `InputSystem_Actions`는 프로젝트 전역 에셋이라 Unity가 스스로 관리하는데, 컴포넌트에서 같은 객체를 또 켜고 끄면 `Map must be contained in state` 오류와 함께 입력이 죽고 플레이 모드가 스스로 종료된다. `Instantiate()`로 전용 복사본을 만들어 쓸 것 (`PlayerController.Awake` 참고).
 - **플레이 모드 중에는 리컴파일하지 않는다.** 도메인 리로드가 걸리면서 위와 같은 `Map must be contained in state` / `Map index on InputActionMap is out of range`가 `OnEnable`에서 터진다. `Instantiate()` 복사본을 써도 막히지 않는다 — 복사본 자체가 리로드로 죽은 채 `OnEnable`이 돌기 때문이다. 증상은 그 세션 동안 입력이 통째로 죽는 것. **스크립트를 고쳤으면 Play를 멈추고 리컴파일한 뒤 다시 Play한다.** MCP로 작업할 때는 `editor_stop` → `recompile` → `editor_play` 순서를 지킬 것.
 - 물리 틱은 50Hz → **100Hz**로 올려둠 (`ProjectSettings/TimeManager.asset`). Unity 6.6에서 이 값은 float이 아니라 `Fixed Timestep.m_Count / 141120000` 형태의 유리수라 인스펙터 밖에서 바꾸려면 `m_Count`를 조정해야 한다.
