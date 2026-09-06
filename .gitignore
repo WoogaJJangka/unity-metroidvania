@@ -47,3 +47,7 @@ crashlytics-build.properties
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# ---- Claude Code ----
+# 스킬은 커밋한다. 머신별 로컬 설정만 제외.
+.claude/settings.local.json
