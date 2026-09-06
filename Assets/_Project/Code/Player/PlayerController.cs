@@ -38,6 +38,13 @@ namespace Game.Player
         private bool _isSliding;
         private float _dashCooldownTimer;
         private float _dashDir;
+        private Vector2 _groundNormal = Vector2.up;   // 발밑 지면의 법선. 평지면 (0,1)
+
+        /// <summary>
+        /// 지면의 기울기 = tan(경사각). 오른쪽이 오르막이면 양수, 내리막이면 음수, 평지면 0.
+        /// 수평 속도 vx로 경사면을 따라가려면 세로 속도가 vx * 이 값이어야 한다.
+        /// </summary>
+        private float SlopeTangent => -_groundNormal.x / _groundNormal.y;
 
         /// <summary>다른 시스템(애니메이션 등)이 상태를 읽기 위한 통로.</summary>
         public bool IsGrounded => _isGrounded;
@@ -130,6 +137,7 @@ namespace Game.Player
             // OverlapBox는 Collider2D를 반환한다. C#은 객체를 bool로 자동 변환하지 않으므로
             // != null 로 명시해야 한다. (RaycastHit2D는 구조체라 bool 변환이 정의되어 있어 그냥 쓸 수 있다.)
             _isGrounded = Physics2D.OverlapBox(center, config.groundCheckSize, 0f, groundLayer) != null;
+            _groundNormal = _isGrounded ? ProbeGroundNormal(b) : Vector2.up;
 
             if (_isGrounded && _rb.linearVelocity.y <= 0.01f)
             {
@@ -142,6 +150,40 @@ namespace Game.Player
             {
                 _coyoteTimer -= Time.fixedDeltaTime;
             }
+        }
+
+        /// <summary>
+        /// 발밑으로 광선을 쏴 지면의 법선을 얻는다. 접지 여부 자체는 위의 OverlapBox가 이미
+        /// 정했고(튜닝이 끝난 판정이라 건드리지 않는다) 여기서는 각도만 본다.
+        ///
+        /// 진행 방향 앞쪽을 미리 보는 방식은 쓰지 않는다. 시도해봤지만 평지에서 오르막에
+        /// 닿기도 전에 위쪽 속도가 붙어 플레이어가 발사된다(실측 vy +3.9). 경사 진입에서
+        /// 속도가 깎이는 문제는 코드가 아니라 지형 문제다 — 램프 끝이 바닥 표면에 꼭짓점으로
+        /// 노출되면 캡슐이 거기 부딪혀 속도를 잃는다. 램프 아래끝을 바닥 안으로 묻어야 한다.
+        ///
+        /// ponytail: 램프를 묻어도 진입 0.5유닛 구간에서 vx가 9 -> 2.2로 잠깐 꺼진다.
+        /// 캡슐 앞면이 램프에 닿는 동안 중심 광선은 아직 아래 바닥을 먼저 맞기 때문. 접지는
+        /// 유지되고 groundAccel로 0.1초 만에 복구되므로 그대로 둔다. 거슬리면 접촉점 법선
+        /// (Collider2D.GetContacts)으로 바꿀 것 — 광선을 앞으로 옮기는 방식은 이미 실패했다.
+        /// </summary>
+        private Vector2 ProbeGroundNormal(Bounds b)
+        {
+            // 광선 길이는 접지 판정 박스가 볼 수 있는 만큼 내려가야 한다.
+            // 박스는 폭이 있어서 경사면 위쪽 모서리로 지면을 먼저 잡는데, 중심에서 쏘는 광선이
+            // 거기까지 못 닿으면 "접지는 맞는데 경사는 평지"로 읽혀 경사 추종이 통째로 빠진다.
+            // 박스 반폭 x tan(최대경사)가 그 높이차다.
+            float slopeReach = config.groundCheckSize.x * 0.5f
+                               * Mathf.Tan(config.maxSlopeAngle * Mathf.Deg2Rad);
+            float reach = b.extents.y + config.groundCheckOffset + config.groundCheckSize.y + slopeReach;
+
+            // 광선 시작점이 플레이어 콜라이더 안이지만 groundLayer로 걸러 쏘므로 자기 자신은 맞지 않는다.
+            var hit = Physics2D.Raycast(b.center, Vector2.down, reach, groundLayer);
+            if (!hit) return Vector2.up;
+
+            // 너무 가파른 면은 경사로 취급하지 않는다. 그대로 두면 tan이 폭증해
+            // 수평 속도가 세로 속도로 증폭되면서 벽을 타고 튀어오른다.
+            float minNormalY = Mathf.Cos(config.maxSlopeAngle * Mathf.Deg2Rad);
+            return hit.normal.y >= minNormalY ? hit.normal : Vector2.up;
         }
 
         private void TryJump()
@@ -183,7 +225,14 @@ namespace Game.Player
 
             if (!_isSliding) return;
 
-            float vx = Mathf.MoveTowards(_rb.linearVelocity.x, _dashDir * config.maxSpeed,
+            // 경사 가속. grade는 진행 방향 기준 기울기 — 오르막이면 양수, 내리막이면 음수다.
+            // 내리막에서 목표 속도가 maxSpeed 위로 올라가므로 아래 종료 조건에 걸리지 않고
+            // 슬라이드가 이어지며 속도가 누적된다. 평지에서는 grade가 0이라 예전과 완전히 같다.
+            float grade = SlopeTangent * _dashDir;
+            float slideTarget = config.maxSpeed - grade * config.slopeDashBonus;
+
+            // 같은 dashDecel이 마찰이자 경사 가속도다. 목표가 위면 가속, 아래면 감속으로 저절로 갈린다.
+            float vx = Mathf.MoveTowards(_rb.linearVelocity.x, _dashDir * slideTarget,
                                          config.dashDecel * Time.fixedDeltaTime);
             _rb.linearVelocity = new Vector2(vx, _rb.linearVelocity.y);
 
@@ -251,8 +300,18 @@ namespace Game.Player
             // 중력도 건너뛰어 공중에 굳어버린다. 아래로 눌러두면 스스로 지면까지 내려온다.
             if (_isGrounded && !_isJumping)
             {
-                if (_rb.linearVelocity.y <= 0f)
-                    _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, -config.groundStickSpeed);
+                // 접지 중에는 속도가 지면에 종속된다. 두 항으로 나뉜다.
+                //  (1) 경사면을 따라가는 성분 — 내리막에서 -groundStickSpeed(2)만 쓰면
+                //      지면이 내려가는 속도를 못 따라가 통통 튀고, 오르막에서는 콜라이더에 밀려 버벅인다.
+                //  (2) 지면으로 눌러붙이는 성분 — 반드시 '월드 아래'가 아니라 '법선 반대'로 밀어야 한다.
+                //      아래로 밀면 경사면에서 그 힘의 접선 성분이 남고, 물리 솔버가 파고든 속도를
+                //      되돌릴 때 그게 전진 속도로 새어 들어간다. 40도 경사에서 스텝당 +0.98
+                //      (= 98 u/s²)이 붙어 걷기만 해도 vx가 9에서 25까지 폭주했다.
+                // 평지에서는 법선이 (0,1)이라 예전과 똑같이 -groundStickSpeed만 남는다.
+                float vx = _rb.linearVelocity.x;
+                _rb.linearVelocity = new Vector2(
+                    vx - config.groundStickSpeed * _groundNormal.x,
+                    vx * SlopeTangent - config.groundStickSpeed * _groundNormal.y);
                 return;
             }
 

@@ -35,4 +35,6 @@ MonoBehaviour:
   dashDecel: 50
   momentumDecel: 12
   dashCooldown: 0.15
+  maxSlopeAngle: 50
+  slopeDashBonus: 20
   cornerCorrectionDistance: 0.25

@@ -94,6 +94,17 @@ namespace Game.Player
         [Tooltip("대시가 끝난 뒤 다시 쓸 수 있을 때까지의 시간 (sec)")]
         public float dashCooldown = 0.15f;
 
+        [Header("경사")]
+        [Tooltip("걸어 올라갈 수 있는 최대 경사각 (도). 이보다 가파르면 경사로 취급하지 않아 " +
+                 "수평 속도가 세로 속도로 증폭되며 튀어오르는 일을 막는다")]
+        [Range(0f, 80f)]
+        public float maxSlopeAngle = 50f;
+
+        [Tooltip("내리막 슬라이드에서 목표 속도에 더해지는 양 (units/sec). " +
+                 "경사 1(45도)당 이만큼 maxSpeed 위로 목표가 올라가 슬라이드가 죽지 않고 가속된다. " +
+                 "오르막에서는 반대로 목표가 내려가 더 빨리 끝난다. 0이면 경사 가속 없음")]
+        public float slopeDashBonus = 20f;
+
         [Header("모서리 보정")]
         [Tooltip("상승 중 머리가 천장 모서리에 걸릴 때 옆으로 밀어줄 최대 거리. 0이면 비활성")]
         public float cornerCorrectionDistance = 0.25f;
