@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: MovementConfig
   m_EditorClassIdentifier: Assembly-CSharp::Game.Player.MovementConfig
   maxSpeed: 9
-  groundAccel: 90
-  groundDecel: 110
-  airAccel: 60
+  groundAccel: 110
+  groundDecel: 60
+  airAccel: 75
   airDecel: 40
   turnAccelMultiplier: 2
   jumpHeight: 3.2
