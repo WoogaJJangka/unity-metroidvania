@@ -25,6 +25,7 @@ namespace Game.Player
         private InputActionMap _playerMap;
         private InputAction _moveAction;
         private InputAction _jumpAction;
+        private InputAction _dashAction;
 
         private float _moveInput;
         private bool _isGrounded;
@@ -32,10 +33,16 @@ namespace Game.Player
         private float _jumpBufferTimer;  // 미리 누른 점프가 유효한 남은 시간
         private bool _isJumping;         // 이번 점프의 상승 구간이 진행 중인가
         private bool _jumpCutApplied;    // 이번 점프에서 이미 높이를 깎았는가
+        private float _facing = 1f;      // 마지막으로 바라본 방향 (+1 오른쪽 / -1 왼쪽)
+        private float _dashBufferTimer;  // 미리 누른 슬라이드가 유효한 남은 시간
+        private bool _isSliding;
+        private float _dashCooldownTimer;
+        private float _dashDir;
 
         /// <summary>다른 시스템(애니메이션 등)이 상태를 읽기 위한 통로.</summary>
         public bool IsGrounded => _isGrounded;
         public Vector2 Velocity => _rb.linearVelocity;
+        public bool IsDashing => _isSliding;
 
         private void Awake()
         {
@@ -59,6 +66,8 @@ namespace Game.Player
             _playerMap = _actionsInstance.FindActionMap("Player", true);
             _moveAction = _playerMap.FindAction("Move", true);
             _jumpAction = _playerMap.FindAction("Jump", true);
+            // 대시는 템플릿에 이미 있는 Sprint(LeftShift / 좌스틱 클릭)를 그대로 쓴다.
+            _dashAction = _playerMap.FindAction("Sprint", true);
         }
 
         private void OnEnable() => _playerMap?.Enable();
@@ -74,6 +83,15 @@ namespace Game.Player
         private void Update()
         {
             _moveInput = _moveAction.ReadValue<Vector2>().x;
+            if (Mathf.Abs(_moveInput) > 0.01f) _facing = Mathf.Sign(_moveInput);
+
+            // 점프 버퍼와 같은 구조. 착지 직전에 눌러도 착지하는 순간 슬라이드가 나가야
+            // 슬라이드 → 점프 → 슬라이드 연계가 성립한다. 프레임을 정확히 맞출 것을 요구하면
+            // 연계 자체가 성립하지 않는다.
+            if (_dashAction.WasPressedThisFrame())
+                _dashBufferTimer = config.jumpBufferTime;
+            else
+                _dashBufferTimer -= Time.deltaTime;
 
             // 점프 버퍼: 누른 순간 타이머를 채우고 매 프레임 줄인다.
             // 착지 직전에 눌러도 착지하는 순간 점프가 나가서 "씹혔다"는 느낌이 사라진다.
@@ -98,6 +116,7 @@ namespace Game.Player
         private void FixedUpdate()
         {
             UpdateGrounded();
+            UpdateDash();
             TryJump();
             ApplyHorizontal();
             ApplyGravity();
@@ -135,11 +154,71 @@ namespace Game.Player
             _coyoteTimer = 0f;   // 한 번의 입력으로 두 번 뛰지 않게 즉시 소모
             _isJumping = true;
             _jumpCutApplied = false;
+
+            // 점프는 슬라이드를 끊되 수평 속도는 건드리지 않는다. 그 속도를 ApplyHorizontal이
+            // momentumDecel로만 깎으므로 공중까지 실려 나간다 — 슬라이드 점프의 근거.
+            if (_isSliding) EndSlide();
+        }
+
+        /// <summary>
+        /// 지상 슬라이드. 고정 지속 시간이 없다 — dashDecel로 깎이다 maxSpeed까지 떨어지면 끝난다.
+        /// 들어올 때 이미 빠르면 그 속도를 유지하므로 슬라이드 → 점프 → 슬라이드로 속도가 이어진다.
+        /// </summary>
+        private void UpdateDash()
+        {
+            if (!_isSliding) _dashCooldownTimer -= Time.fixedDeltaTime;
+
+            if (!_isSliding && _dashBufferTimer > 0f && _isGrounded && _dashCooldownTimer <= 0f)
+            {
+                _dashBufferTimer = 0f;
+                _isSliding = true;
+                _dashDir = _facing;
+
+                // 여기가 모멘텀 체이닝의 핵심. 슬라이드 점프로 얻은 속도를 안고 착지해
+                // 다시 슬라이드하면 dashSpeed로 깎이는 게 아니라 그 속도가 그대로 이어진다.
+                float entrySpeed = Mathf.Max(config.dashSpeed, Mathf.Abs(_rb.linearVelocity.x));
+                _rb.linearVelocity = new Vector2(_dashDir * entrySpeed, _rb.linearVelocity.y);
+                return;   // 출발 프레임에는 깎지 않는다
+            }
+
+            if (!_isSliding) return;
+
+            float vx = Mathf.MoveTowards(_rb.linearVelocity.x, _dashDir * config.maxSpeed,
+                                         config.dashDecel * Time.fixedDeltaTime);
+            _rb.linearVelocity = new Vector2(vx, _rb.linearVelocity.y);
+
+            // 평소 달리기 속도까지 마찰로 떨어졌거나 발판을 벗어나면 슬라이드가 끝난다.
+            if (Mathf.Abs(vx) <= config.maxSpeed + 0.01f || !_isGrounded)
+                EndSlide();
+        }
+
+        private void EndSlide()
+        {
+            _isSliding = false;
+            _dashCooldownTimer = config.dashCooldown;
         }
 
         private void ApplyHorizontal()
         {
+            // 슬라이드 중에는 입력으로 수평 속도를 건드리지 않는다. 안 그러면 반대로 입력하는
+            // 것만으로 슬라이드가 즉시 죽어서 거리가 들쭉날쭉해진다.
+            if (_isSliding) return;
+
             bool wantsMove = Mathf.Abs(_moveInput) > 0.01f;
+
+            // maxSpeed를 넘는 속도는 슬라이드에서 얻은 모멘텀이다. 같은 방향으로 가는 한
+            // 평소 가감속(airAccel 100 등)으로 끌어내리지 않고 momentumDecel로만 깎는다.
+            // 이 분기가 없으면 슬라이드 점프의 속도가 공중에서 즉시 증발해 연계가 성립하지 않는다.
+            // 반대 방향을 입력하면 이 분기를 타지 않으므로 평소대로 급제동이 걸린다.
+            float vxNow = _rb.linearVelocity.x;
+            if (Mathf.Abs(vxNow) > config.maxSpeed
+                && (!wantsMove || Mathf.Sign(_moveInput) == Mathf.Sign(vxNow)))
+            {
+                float kept = Mathf.MoveTowards(vxNow, Mathf.Sign(vxNow) * config.maxSpeed,
+                                               config.momentumDecel * Time.fixedDeltaTime);
+                _rb.linearVelocity = new Vector2(kept, _rb.linearVelocity.y);
+                return;
+            }
 
             float target = _moveInput * config.maxSpeed;
             if (wantsMove && IsNearApex())

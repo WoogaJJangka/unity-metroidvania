@@ -62,6 +62,18 @@ Assets/
   - ⏸ **타일맵 보류** — 타일 아트가 없어 룰 타일을 지금 세팅해도 쓸 데가 없다. Kenney 에셋 도입 시 착수
   - ⏸ **Sorting Layer 보류** — 스프라이트가 전부 `Default` 하나뿐. 배경 아트 생기면 정한다
 
+- **슬라이드(지상 대시) 완료** — 사용자 확인 받음. Apex Legends식 모멘텀 슬라이드.
+  최종값: `dashSpeed 32`, `dashDecel 50`, `momentumDecel 12`, `dashCooldown 0.15`
+  - 입력은 템플릿에 이미 있던 `Sprint`(LeftShift / 좌스틱 클릭) 재사용. 새 액션 안 만듦
+  - **고정 지속 시간이 없다.** `dashDecel` 마찰로 `maxSpeed`까지 떨어지거나 발판을 벗어나면 끝난다
+  - **모멘텀 보존이 핵심.** `ApplyHorizontal`은 `maxSpeed` 초과분을 `momentumDecel`로만 깎는다.
+    이 분기가 없으면 슬라이드 점프 속도가 `airAccel` 100에 끌려 0.2초 만에 증발해 연계가 성립하지 않는다
+  - 진입 속도 `Max(dashSpeed, |현재 vx|)` → 슬라이드 → 점프 → 착지 → 슬라이드로 속도가 이어진다
+  - 슬라이드 입력도 버퍼를 쓴다 (`jumpBufferTime` 공유). 착지 프레임을 맞춰야 하면 연계가 안 된다
+  - 실측: 단독 슬라이드 32.0 → 0.46s → 9.52u. 연계 시 공중 감쇠 12/s²로 21.3 → 15.5, 재진입 32.0
+  - ⏸ **경사 가속 보류** — Apex의 속도 *누적*은 내리막에서 나오는데 맵에 경사가 없다.
+    평지에서는 32로 복원될 뿐 누적되지 않는다. 타일맵 들어갈 때 경사각으로 `dashDecel`을 뒤집을 것
+
 ### Phase 1에서 끝난 것
 - `PlayerController` + `MovementConfig` — 가변 점프, 코요테 타임, 점프 버퍼, 정점 체공, 모서리 보정, 방향 전환 가속
 - 테스트 맵 `Assets/_Project/Scenes/Maps/TestBox.unity` (점프 거리·높이·천장 틈 시험 구간)
@@ -80,6 +92,7 @@ Assets/
 
 ### 오늘 겪은 것 (반복하지 말 것)
 - **입력 에셋을 그대로 Enable/Disable 하면 안 된다.** `InputSystem_Actions`는 프로젝트 전역 에셋이라 Unity가 스스로 관리하는데, 컴포넌트에서 같은 객체를 또 켜고 끄면 `Map must be contained in state` 오류와 함께 입력이 죽고 플레이 모드가 스스로 종료된다. `Instantiate()`로 전용 복사본을 만들어 쓸 것 (`PlayerController.Awake` 참고).
+- **플레이 모드 중에는 리컴파일하지 않는다.** 도메인 리로드가 걸리면서 위와 같은 `Map must be contained in state` / `Map index on InputActionMap is out of range`가 `OnEnable`에서 터진다. `Instantiate()` 복사본을 써도 막히지 않는다 — 복사본 자체가 리로드로 죽은 채 `OnEnable`이 돌기 때문이다. 증상은 그 세션 동안 입력이 통째로 죽는 것. **스크립트를 고쳤으면 Play를 멈추고 리컴파일한 뒤 다시 Play한다.** MCP로 작업할 때는 `editor_stop` → `recompile` → `editor_play` 순서를 지킬 것.
 - 물리 틱은 50Hz → **100Hz**로 올려둠 (`ProjectSettings/TimeManager.asset`). Unity 6.6에서 이 값은 float이 아니라 `Fixed Timestep.m_Count / 141120000` 형태의 유리수라 인스펙터 밖에서 바꾸려면 `m_Count`를 조정해야 한다.
 - 이산 적분 오차 때문에 실제 최고 도달 높이는 `jumpHeight`보다 약 0.1 낮다. 3유닛 계단은 문제없이 넘으므로 지금은 보정하지 않음.
 - **에디터 창이 백그라운드면 Play 모드 프레임이 멈춘다.** `playing=True`인데 `Time.frameCount`가 고정되면 이것이다(플레이 모드가 종료된 게 아니다). `runInBackground`를 켜서 해결했고, 이 값은 부팅 시 읽히므로 **에디터 재시작이 필요**하다. `PlayerSettings.runInBackground = true`는 디스크에 안 써지니 `Unsupported.GetSerializedAssetInterfaceSingleton("PlayerSettings")` + SerializedObject로 쓸 것.

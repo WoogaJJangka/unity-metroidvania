@@ -31,4 +31,8 @@ MonoBehaviour:
   groundCheckSize: {x: 0.45, y: 0.12}
   groundCheckOffset: 0.02
   groundStickSpeed: 2
+  dashSpeed: 32
+  dashDecel: 50
+  momentumDecel: 12
+  dashCooldown: 0.15
   cornerCorrectionDistance: 0.25

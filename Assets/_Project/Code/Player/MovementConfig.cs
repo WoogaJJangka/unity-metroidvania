@@ -78,6 +78,22 @@ namespace Game.Player
                  "공중에 뜬 채로 굳는다. 경사나 이음새에서 튀지 않게 하는 역할도 한다")]
         public float groundStickSpeed = 2f;
 
+        [Header("지상 대시 슬라이드")]
+        [Tooltip("슬라이드 출발 속도 (units/sec). maxSpeed보다 충분히 커야 '치고 나간다'는 느낌이 난다")]
+        public float dashSpeed = 32f;
+
+        [Tooltip("슬라이드 중 마찰 감속도 (units/sec²). 속도가 maxSpeed까지 떨어지면 슬라이드가 끝난다. " +
+                 "고정 지속 시간은 없고 이 값이 슬라이드 길이를 정한다")]
+        public float dashDecel = 50f;
+
+        [Tooltip("maxSpeed를 넘는 속도(슬라이드로 얻은 모멘텀)가 깎이는 감속도 (units/sec²). " +
+                 "작을수록 슬라이드 → 점프 → 슬라이드로 속도가 잘 이어진다. 이 값이 크면 " +
+                 "공중에서 속도가 증발해 연계가 끊긴다")]
+        public float momentumDecel = 12f;
+
+        [Tooltip("대시가 끝난 뒤 다시 쓸 수 있을 때까지의 시간 (sec)")]
+        public float dashCooldown = 0.15f;
+
         [Header("모서리 보정")]
         [Tooltip("상승 중 머리가 천장 모서리에 걸릴 때 옆으로 밀어줄 최대 거리. 0이면 비활성")]
         public float cornerCorrectionDistance = 0.25f;
