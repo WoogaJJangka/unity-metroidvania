@@ -77,6 +77,9 @@ Assets/
 - 이산 적분 오차 때문에 실제 최고 도달 높이는 `jumpHeight`보다 약 0.1 낮다. 3유닛 계단은 문제없이 넘으므로 지금은 보정하지 않음.
 - **에디터 창이 백그라운드면 Play 모드 프레임이 멈춘다.** `playing=True`인데 `Time.frameCount`가 고정되면 이것이다(플레이 모드가 종료된 게 아니다). `runInBackground`를 켜서 해결했고, 이 값은 부팅 시 읽히므로 **에디터 재시작이 필요**하다. `PlayerSettings.runInBackground = true`는 디스크에 안 써지니 `Unsupported.GetSerializedAssetInterfaceSingleton("PlayerSettings")` + SerializedObject로 쓸 것.
 - 레이캐스트로 뭔가를 감지할 때 **탐지 거리는 한 물리 스텝의 이동량보다 커야 한다.** 고정 거리를 쓰면 빠를 때 구간을 건너뛴다 (`CorrectCorner`의 `probeUp` 참고).
+- **속도를 코드로 직접 지정하는 콜라이더에는 마찰 0 물리 머티리얼을 반드시 붙인다** (`Assets/_Project/Data/PlayerNoFriction.physicsMaterial2D`). 머티리얼이 없으면 Unity 2D 기본 마찰 0.4가 걸리고, `groundStickSpeed`(2.0)로 지면을 누르는 힘과 곱해져 매 스텝 `0.4 x 2.0 = 0.8`씩 수평 속도가 사라진다. 감속 80 u/s²에 해당하며 `groundAccel` 110의 대부분을 상쇄한다.
+  - **진단 방법**: `groundDecel`/`airDecel`을 일시적으로 0으로 두고 속도를 준 뒤 vx가 유지되는지 본다. 줄어들면 우리 코드 밖에서 속도를 먹는 것이 있다는 뜻. 감속값이 살아 있으면 손실이 감속에 묻혀 보이지 않는다.
+  - 안착 **이후**에만 나타난다. 착지 직후 아직 가라앉는 중에는 접촉 충격이 달라 안 보이므로, 착지 순간만 보고 판단하면 놓친다.
 
 ## 툴체인 (Unity CLI)
 `C:\Users\siwon\AppData\Local\Unity\bin\unity.exe` (사용자 PATH에 등록됨). Hub GUI 없이 대부분을 자동화할 수 있다.
