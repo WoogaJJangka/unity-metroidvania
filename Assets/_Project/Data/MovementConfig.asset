@@ -15,7 +15,7 @@ MonoBehaviour:
   maxSpeed: 9
   groundAccel: 110
   groundDecel: 60
-  airAccel: 75
+  airAccel: 100
   airDecel: 40
   turnAccelMultiplier: 2
   jumpHeight: 3.2
@@ -24,7 +24,7 @@ MonoBehaviour:
   jumpCutMultiplier: 0.5
   apexThreshold: 2.5
   apexGravityMultiplier: 0.5
-  apexBonusSpeed: 1.5
+  apexBonusSpeed: 0
   maxFallSpeed: 22
   coyoteTime: 0.1
   jumpBufferTime: 0.15
