@@ -22,6 +22,7 @@ Assets/
   Welcome/             템플릿 튜토리얼. 건드리지 않는다.
 ```
 - 새 파일은 항상 `Assets/_Project/` 아래에 만든다.
+- 그래픽 작업은 먼저 `Assets/_Project/Art/ART_DIRECTION.md`를 읽는다. 이 문서가 픽셀 규격, 스타일, 에셋 이름, AI 작업 요청 형식의 기준이다.
 - `Assets/Settings/`의 URP·Input 에셋은 **이동·이름 변경 금지** (프로젝트 설정이 GUID로 참조 중).
 
 ## 코딩 규칙
