@@ -4,7 +4,12 @@
 - **장르**: 2D 메트로배니아. 맵 전환형 오픈월드(메이플스토리식) + 오리/할로우나이트의 조작감·분위기
 - **범위**: 전투, 탐험, 능력 해금 게이팅, 스토리 퀘스트, 미니게임
 - **엔진**: Unity 6000.6.0f1 / Universal 2D 템플릿 (URP 2D Renderer)
+- **게임 기획서(최상위 문서)**: `C:\Users\siwon\Documents\게임 개발 기획서-gmae_project.docx`
+  - **핵심**: 슬라이딩 하나가 이동·공격·회피를 전부 한다. 공격 버튼에 의존하지 않는 것이 이 게임의 정체성
+  - 로그라인: 의족을 단 우편배달부가 슬라이딩으로 지형과 적을 돌파하며 소포의 사연을 전한다
+  - 미구현 축: **과열(過熱)** 자원(무한 슬라이딩 방지, 냉각/가열 지형), **패링**(투사체를 슬라이딩으로 튕김), **슬라이딩 개조**(Phase 4 해금의 실체)
 - **개발 로드맵**: `C:\Users\siwon\.claude\plans\atomic-noodling-sunbeam.md`
+  (맨 끝 "기획서 반영 — 로드맵 개정" 절이 현재 순서다. 그 위 Phase 3~5 본문은 개정 전 내용)
 - **개발자**: C 언어 경험 있음, C#·Unity 입문. 새 개념이 나오면 한 줄 설명을 덧붙일 것.
 
 ## 폴더 규칙
@@ -22,7 +27,8 @@ Assets/
   Welcome/             템플릿 튜토리얼. 건드리지 않는다.
 ```
 - 새 파일은 항상 `Assets/_Project/` 아래에 만든다.
-- 그래픽 작업은 먼저 `Assets/_Project/Art/ART_DIRECTION.md`를 읽는다. 이 문서가 픽셀 규격, 스타일, 에셋 이름, AI 작업 요청 형식의 기준이다.
+- **아트는 보류다.** 게임플레이 시스템이 먼저 선다. 실제 스프라이트·타일·배경을 만들지 않고 흰 사각형으로 계속 개발한다. 픽셀 규격(해상도, 타일 크기, PPU)도 아직 정하지 않는다 — 지금 정하면 시스템이 바뀔 때마다 다시 정하게 된다.
+- 그래픽 작업을 실제로 시작할 때가 되면 먼저 `Assets/_Project/Art/ART_DIRECTION.md`를 읽는다. 이 문서가 픽셀 규격, 스타일, 에셋 이름, AI 작업 요청 형식의 기준이다.
 - `Assets/Settings/`의 URP·Input 에셋은 **이동·이름 변경 금지** (프로젝트 설정이 GUID로 참조 중).
 
 ## 코딩 규칙
@@ -98,7 +104,44 @@ Assets/
     중복은 `_hitThisSwing` HashSet이 막는다 (한 번 휘두르기에 한 대상 한 번)
   - 실측: 넉백 1.200u (예측 `kbSpeed²/(2·decay)` = 1.25), 3타에 사망, 한 번의 타격에서
     `timeScale` 최저 0.000(히트스톱)과 카메라 이탈 0.347u(화면 흔들림)를 동시에 확인
-  - ⏸ **맞는 쪽 미구현** — 플레이어 `Health`, 접촉 피해, 적 AI(FSM)는 다음 조각
+  - ✅ **주 공격 = 슬라이드로 전환 완료** (2026-09-07). 히트박스를 켜는 주체가 `Attack` 버튼에서
+    `PlayerController.IsDashing`으로 바뀌었다. 슬라이드에는 고정 지속 시간이 없으므로(마찰로 끝난다)
+    코루틴으로 흉내 내지 않고 상태를 매 프레임 따라간다. 켜지는 순간이 `Hitbox`의 "휘두르기 한 번"
+    경계라 한 슬라이드에 같은 적을 한 번만 때린다
+  - ✅ **보조 공격 = 거리 확보용 밀치기.** 킬 루트가 되면 안 되므로 damage 0.25 / knockbackSpeed 18.
+    `PlayerController`가 `IsAttacking`을 읽지 않아 **밀치기 → 즉시 슬라이드 연계가 코드 없이 성립**한다
+  - ✅ **맞는 쪽 완료** (2026-09-07) — Play 모드 실측 검증
+    - `Health.Invincible`(외부가 켜는 무적) + `PlayerAttack`이 슬라이드 상태를 그대로 옮긴다 = **공방일체**
+    - `IDamageable.TakeDamage`가 `bool`을 반환한다. 무적으로 씹힌 타격에 히트스톱·화면 흔들림이 나가면
+      "무적으로 뚫었다"가 "맞았다"로 읽힌다
+    - `Hitbox.continuous` — 적의 몸통 접촉 피해처럼 **계속 켜져 있는 판정**은 켜짐/꺼짐 경계가 없어
+      `_hitThisSwing` 기록을 쓰면 한 번 때리고 영영 못 때린다. 켜면 기록을 건너뛰고 연타는 맞는 쪽 무적이 막는다
+    - `PlayerController.ApplyHorizontal`은 `Health.IsKnockedBack` 동안 조기 반환한다. 없으면 넉백 속도가
+      다음 물리 스텝에 `groundAccel`로 지워져 맞은 티가 전혀 안 난다
+    - `PlayerDeath` — 죽으면 현재 씬 재로드. 체크포인트·페이드 없는 최소 구현(Phase 5에서 교체)
+    - 실측: 걸어서 접촉 → HP 5→4, 넉백 vx -6.80 / **슬라이드로 통과 → 플레이어 HP 유지, 적 HP 3→2**,
+      슬라이드 최고 vx 32.0
+  - ✅ **적 AI 완료** (2026-09-07) — Play 모드 실측 검증. `EnemyConfig` + `EnemyAI`(enum FSM) + `Projectile`
+    - 상태는 `Patrol / Chase / Attack / Hurt / Dead` 다섯 개. Idle은 안 만들었다 — `patrolSpeed 0`이
+      곧 제자리 지키기라서 상태를 하나 더 둘 이유가 없다
+    - **근접형과 원거리형이 한 스크립트다.** 갈리는 곳은 `projectile` 필드 하나 —
+      비어 있으면 계속 달려들고(피해는 몸통 `ContactHitbox`), 채워져 있으면 `attackRange`에서 멈춰 쏜다.
+      클래스를 나누면 감지·순찰·넉백 처리가 통째로 복사된다
+    - **`detectRange`와 `loseRange`를 따로 둔다(8 / 12).** 같으면 경계선에서 추격/순찰이 매 프레임
+      번갈아 바뀌며 덜덜 떤다
+    - **`chaseSpeed 5`는 플레이어 `maxSpeed 9`보다 느리다.** 뿌리칠 수 있어야 슬라이드가 답이 된다.
+      적은 "붙으면 아픈 벽"이지 "가로막는 벽"이 아니다 — Player x Enemy 충돌은 꺼져 있어 통과한다
+    - 순찰 경로를 씬에 찍지 않는다. 벽 광선과 발밑 낭떠러지 광선으로 스스로 돌아선다
+    - `Projectile`은 이동과 수명만 맡는다. 피해·넉백·타격감은 같은 오브젝트의 `Hitbox`가 그대로 한다.
+      `origin`을 비워 두면 탄 자신이 기준이 되어 넉백 방향이 저절로 맞는다.
+      `blockLayer`에 **Ground와 Player를 둘 다** 넣는다 — 맞는 쪽이 빠지면 무적으로 뚫고 지나간 탄이
+      남아 뒤에서 다시 때린다. `EnemyHitbox x Ground` 충돌 칸도 열어야 벽에 막힌다 (기본값은 닫힘)
+    - 실측: 거리 17.4(loseRange 밖) → `Patrol` vx -2.00 / 거리 9 → `Chase`로 전환해 5 u/s로 접근 /
+      사수는 `Attack`에서 vx 0.00으로 멈춰 발사, 탄이 플레이어 HP 2→1로 깎고 사라짐
+  - ⏸ **Phase 3 남은 것** — `EnemyConfig`를 쓰는 적 프리팹화(지금은 씬 오브젝트 2기),
+    적 사망 연출, 보스
+  - ⏸ **과열(過熱) 보류** — 적 AI 뒤에 온다. "몇 번 슬라이드하면 막히는가"는 적과 싸워봐야 정해지고,
+    먼저 만들면 숫자를 감으로 박은 뒤 전부 다시 맞추게 된다
 
 ### Phase 1에서 끝난 것
 - `PlayerController` + `MovementConfig` — 가변 점프, 코요테 타임, 점프 버퍼, 정점 체공, 모서리 보정, 방향 전환 가속
@@ -168,4 +211,25 @@ Assets/
 - `Packages/manifest.json`을 바꾼 뒤에는 **에디터를 재시작**해야 반영된다. 부팅 중에 바꾸면 무시된다.
 - Git Bash에서 `tasklist /FI "IMAGENAME eq ..."` 필터는 오작동한다. 프로세스 확인은 `tasklist | grep` 형태로 하고 `head`로 자르지 말 것 (Unity Hub.exe 항목이 여러 개라 Unity.exe 행이 잘려 나간다).
 - **CLI 바이너리도 이름이 `Unity.exe`다.** 프로세스 이름만으로 에디터를 찾으면 `unity mcp`/`unity status` 프로세스가 잡혀 "에디터가 떠 있다"고 오판한다. 실행 경로로 걸러야 한다: `Get-CimInstance Win32_Process -Filter "Name='Unity.exe'" | Where-Object { $_.ExecutablePath -like "*Hub\Editor*" }`. 가장 확실한 판정은 `unity status`가 `ready`를 반환하는지 보는 것.
+- **`clear_console`은 콘솔 버퍼를 비우지 않는다.** 비운 줄 알고 다시 읽으면 몇 시간 전 오류가
+  그대로 나온다. 이것 때문에 이미 고쳐진 문제를 계속 재현되는 줄 알고 `PlayerController`의
+  입력 처리를 세 번이나 갈아엎었다(전부 되돌림). **판정은 반드시 `seq`로 한다** — 작업 전 마지막
+  `seq`를 적어두고 그보다 큰 항목만 새 로그로 본다.
+- **긴 검증 코루틴은 플레이어가 죽는 순간 같이 죽는다.** `PlayerDeath`가 씬을 리로드하면서
+  코루틴 호스트가 사라져 결과가 영영 안 써진다. 증상은 `PlayerPrefs`가 계속 "running"인 것.
+  관찰만 할 구간은 `Health.Invincible`을 켜 두거나, **짧은 eval 여러 번으로 나눠서** 본다.
+- **적처럼 계속 움직이는 대상은 `Time.timeScale`을 낮추고 관찰한다.** CLI 왕복이 2초라 그 사이에
+  적이 10유닛을 이동해 "먼 거리에서의 상태"를 볼 수가 없다. `timeScale = 0.05`로 두면
+  왕복 4초가 게임 안에서 0.2초가 되어 배치 직후 상태를 그대로 읽을 수 있다. **읽고 나서 1로 되돌릴 것.**
+- **Play 모드에 키 입력을 주입하려면 게임 뷰 포커스 문제를 먼저 풀어야 한다.** 에디터가 포커스를 잃으면
+  `backgroundBehavior = ResetAndDisableNonBackgroundDevices` 때문에 키보드 이벤트가 통째로 버려진다.
+  증상은 `QueueStateEvent`를 아무리 넣어도 `kb.dKey.isPressed`가 계속 false인 것. `editor_focus`로는 안 풀린다.
+  검증 코루틴 안에서 `InputSystem.settings.backgroundBehavior = IgnoreFocus`와
+  `editorInputBehaviorInPlayMode = AllDeviceInputAlwaysGoesToGameView`를 켰다가 **끝나면 되돌린다**
+  (되돌리지 않으면 프로젝트 설정 에셋이 더러워진다).
+- **`eval` / `eval_file`에는 `using` 지시문을 쓸 수 없다.** 스크립트 본문이 메서드 안에 들어가므로
+  `using UnityEngine;`은 파싱 에러가 된다. 타입을 전부 정규화해서 쓸 것 (`Game.Combat.Health` 등).
+  `UnityEngine`·`UnityEditor`는 이미 열려 있고 `System.Text.StringBuilder`는 정규화가 필요하다.
+- **Git Bash에서 `/Player` 같은 하이어라키 경로는 Windows 경로로 변환된다.** `unity command`에
+  `--target /Player`를 넘기면 `C:/Program Files/Git/Player`로 바뀐다. `export MSYS_NO_PATHCONV=1`을 먼저 할 것.
 - MCP가 에디터에 붙으려면 `com.unity.pipeline` 패키지가 필요하다 (`unity pipeline install --project-path <경로>`).

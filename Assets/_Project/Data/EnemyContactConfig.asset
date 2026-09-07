@@ -10,13 +10,13 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c4e73aa4af6065c4cadb57c21da6b772, type: 3}
-  m_Name: PlayerAttackConfig
+  m_Name: EnemyContactConfig
   m_EditorClassIdentifier: Assembly-CSharp::Game.Combat.AttackConfig
-  damage: 0.25
-  knockbackSpeed: 18
-  knockbackLift: 3
-  windup: 0.03
-  active: 0.08
-  recovery: 0.12
-  hitstop: 0.02
-  shakeForce: 0.15
+  damage: 1
+  knockbackSpeed: 12
+  knockbackLift: 4
+  windup: 0
+  active: 0
+  recovery: 0
+  hitstop: 0.05
+  shakeForce: 0.3

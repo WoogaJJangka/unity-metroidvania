@@ -25,6 +25,13 @@ namespace Game.Combat
         /// <summary>사망 시 알린다. 오브젝트가 지워지기 전에 호출된다.</summary>
         public event Action Died;
 
+        /// <summary>
+        /// 피격 무적과 별개로 "지금은 안 맞는다"를 외부가 켜는 스위치.
+        /// 플레이어의 슬라이드가 이걸 쓴다 — 슬라이딩이 곧 회피라는 것이 이 게임의 설계다.
+        /// 타이머가 아니라 상태라서, 켠 쪽이 끄는 책임도 진다.
+        /// </summary>
+        public bool Invincible { get; set; }
+
         public float Current { get; private set; }
         public float Max => maxHp;
         public bool IsAlive => Current > 0f;
@@ -71,9 +78,9 @@ namespace Game.Combat
             if (Mathf.Abs(vx) < 0.01f) _knockedBack = false;
         }
 
-        public void TakeDamage(DamageInfo info)
+        public bool TakeDamage(DamageInfo info)
         {
-            if (!IsAlive || _invincibleTimer > 0f) return;
+            if (!IsAlive || Invincible || _invincibleTimer > 0f) return false;
 
             Current = Mathf.Max(0f, Current - info.amount);
             _invincibleTimer = config.invincibleDuration;
@@ -92,11 +99,12 @@ namespace Game.Combat
             if (!IsAlive)
             {
                 Die();
-                return;
+                return true;
             }
 
             if (_blink != null) StopCoroutine(_blink);
             _blink = StartCoroutine(Blink());
+            return true;
         }
 
         private void Die()

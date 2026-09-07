@@ -86,10 +86,16 @@ namespace Game.Player
                  "고정 지속 시간은 없고 이 값이 슬라이드 길이를 정한다")]
         public float dashDecel = 50f;
 
-        [Tooltip("maxSpeed를 넘는 속도(슬라이드로 얻은 모멘텀)가 깎이는 감속도 (units/sec²). " +
+        [Tooltip("공중에서 maxSpeed를 넘는 속도(슬라이드로 얻은 모멘텀)가 깎이는 감속도 (units/sec²). " +
                  "작을수록 슬라이드 → 점프 → 슬라이드로 속도가 잘 이어진다. 이 값이 크면 " +
                  "공중에서 속도가 증발해 연계가 끊긴다")]
         public float momentumDecel = 12f;
+
+        [Tooltip("접지 중 모멘텀 감속도 (units/sec²). 내리막에서 번 속도가 평지에서 maxSpeed까지 " +
+                 "떨어지는 거리를 정한다 — 거리 = (진입속도² - maxSpeed²) / (2 x 이 값). " +
+                 "평지 슬라이드 거리(9.3u)와 비슷하게 맞춰 두면 경사의 이점이 '더 멀리'가 아니라 " +
+                 "'더 빠르게'가 된다. 공중값과 나눈 이유는 공중값을 올리면 슬라이드 점프 연계가 끊기기 때문")]
+        public float groundMomentumDecel = 66f;
 
         [Tooltip("대시가 끝난 뒤 다시 쓸 수 있을 때까지의 시간 (sec)")]
         public float dashCooldown = 0.15f;
@@ -102,8 +108,11 @@ namespace Game.Player
 
         [Tooltip("내리막 슬라이드에서 목표 속도에 더해지는 양 (units/sec). " +
                  "경사 1(45도)당 이만큼 maxSpeed 위로 목표가 올라가 슬라이드가 죽지 않고 가속된다. " +
-                 "오르막에서는 반대로 목표가 내려가 더 빨리 끝난다. 0이면 경사 가속 없음")]
-        public float slopeDashBonus = 20f;
+                 "오르막에서는 반대로 목표가 내려가 더 빨리 끝난다. 0이면 경사 가속 없음. " +
+                 "주의: 목표(maxSpeed + 경사 x 이 값)가 dashSpeed보다 낮으면 내리막이 가속이 아니라 " +
+                 "감속이 된다 — 평지에서 그냥 슬라이드하는 것보다 느려져 경사를 탈 이유가 없어진다. " +
+                 "40도(경사 0.84) 기준 최소 (32-9)/0.84 = 27은 넘겨야 한다")]
+        public float slopeDashBonus = 35f;
 
         [Header("모서리 보정")]
         [Tooltip("상승 중 머리가 천장 모서리에 걸릴 때 옆으로 밀어줄 최대 거리. 0이면 비활성")]

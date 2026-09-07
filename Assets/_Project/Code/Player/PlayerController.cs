@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Game.Combat;
 
 namespace Game.Player
 {
@@ -21,6 +22,7 @@ namespace Game.Player
         // C#에서 private 필드는 관례상 _로 시작한다 (CLAUDE.md 규칙).
         private Rigidbody2D _rb;
         private CapsuleCollider2D _collider;
+        private Health _health;   // 없을 수도 있다. 넉백 중인지 묻기 위해서만 쓴다
         private InputActionAsset _actionsInstance;   // 이 컴포넌트 전용 복사본
         private InputActionMap _playerMap;
         private InputAction _moveAction;
@@ -38,6 +40,7 @@ namespace Game.Player
         private bool _isSliding;
         private float _dashCooldownTimer;
         private float _dashDir;
+        private bool _wasDescending;     // 이번 슬라이드 중 내리막(grade&lt;0)을 탄 적이 있는가
         private Vector2 _groundNormal = Vector2.up;   // 발밑 지면의 법선. 평지면 (0,1)
 
         /// <summary>
@@ -66,6 +69,7 @@ namespace Game.Player
             // GetComponent는 비싸므로 Awake에서 한 번만 캐싱한다 (CLAUDE.md 규칙).
             _rb = GetComponent<Rigidbody2D>();
             _collider = GetComponent<CapsuleCollider2D>();
+            _health = GetComponent<Health>();
 
             _rb.gravityScale = 0f;                 // 중력은 우리가 직접 계산한다
             _rb.freezeRotation = true;             // 캐릭터가 굴러다니지 않게
@@ -225,6 +229,7 @@ namespace Game.Player
                 _dashBufferTimer = 0f;
                 _isSliding = true;
                 _dashDir = _facing;
+                _wasDescending = false;
 
                 // 여기가 모멘텀 체이닝의 핵심. 슬라이드 점프로 얻은 속도를 안고 착지해
                 // 다시 슬라이드하면 dashSpeed로 깎이는 게 아니라 그 속도가 그대로 이어진다.
@@ -239,6 +244,19 @@ namespace Game.Player
             // 내리막에서 목표 속도가 maxSpeed 위로 올라가므로 아래 종료 조건에 걸리지 않고
             // 슬라이드가 이어지며 속도가 누적된다. 평지에서는 grade가 0이라 예전과 완전히 같다.
             float grade = SlopeTangent * _dashDir;
+
+            // 내리막에서 붙은 속도가 평지로 넘어오는 순간 dashDecel(마찰)로 그대로 갈리면
+            // 슬로프 보너스가 사라진다. 경사가 더 돕지 않게 된 순간(내리막 -> 평지/오르막)
+            // 슬라이드를 끝내 ApplyHorizontal의 모멘텀 보존(momentumDecel)으로 넘긴다 —
+            // 슬라이드 점프 착지와 같은 경로. 평지에서 시작한 슬라이드는 grade가 계속 0이라
+            // 이 분기를 타지 않으므로 원래 마찰 감속(32 -> 9.52)은 그대로다.
+            if (grade < 0f) _wasDescending = true;
+            else if (_wasDescending)
+            {
+                EndSlide();
+                return;
+            }
+
             float slideTarget = config.maxSpeed - grade * config.slopeDashBonus;
 
             // 같은 dashDecel이 마찰이자 경사 가속도다. 목표가 위면 가속, 아래면 감속으로 저절로 갈린다.
@@ -259,6 +277,11 @@ namespace Game.Player
 
         private void ApplyHorizontal()
         {
+            // 맞고 밀려나는 중에는 조작이 속도를 덮어쓰지 않는다. 안 그러면 넉백 속도가
+            // 다음 물리 스텝에 groundAccel로 지워져 맞은 티가 전혀 나지 않는다.
+            // 지속 시간을 따로 두지 않는다 — Health가 속도를 0까지 깎으면 스스로 풀린다.
+            if (_health != null && _health.IsKnockedBack) return;
+
             // 슬라이드 중에는 입력으로 수평 속도를 건드리지 않는다. 안 그러면 반대로 입력하는
             // 것만으로 슬라이드가 즉시 죽어서 거리가 들쭉날쭉해진다.
             if (_isSliding) return;
@@ -273,8 +296,11 @@ namespace Game.Player
             if (Mathf.Abs(vxNow) > config.maxSpeed
                 && (!wantsMove || Mathf.Sign(_moveInput) == Mathf.Sign(vxNow)))
             {
+                // 지면 마찰이 공중보다 세야 자연스럽다. 같은 값을 쓰면 평지에 내려선 뒤에도
+                // 한참을 미끄러진다. 공중값을 올려서 맞추면 슬라이드 점프 연계가 끊긴다.
+                float decel = _isGrounded ? config.groundMomentumDecel : config.momentumDecel;
                 float kept = Mathf.MoveTowards(vxNow, Mathf.Sign(vxNow) * config.maxSpeed,
-                                               config.momentumDecel * Time.fixedDeltaTime);
+                                               decel * Time.fixedDeltaTime);
                 _rb.linearVelocity = new Vector2(kept, _rb.linearVelocity.y);
                 return;
             }

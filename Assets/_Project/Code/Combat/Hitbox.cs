@@ -19,6 +19,12 @@ namespace Game.Combat
         [Tooltip("넉백 방향을 재는 기준점. 보통 공격자 본체. 비우면 이 오브젝트를 쓴다")]
         [SerializeField] private Transform origin;
 
+        [Tooltip("계속 켜져 있는 판정인가 (적의 몸통 접촉 피해 등). " +
+                 "휘두르기는 켜질 때마다 대상 기록을 비워 중복을 막지만, 계속 켜져 있는 판정은 " +
+                 "그 경계가 없어 한 번 때리면 영영 못 때린다. 켜 두면 기록을 쓰지 않고 " +
+                 "연타는 맞는 쪽의 무적 시간이 막는다")]
+        [SerializeField] private bool continuous;
+
         private CinemachineImpulseSource _impulse;
 
         // 한 번 휘두르는 동안 같은 대상을 여러 번 때리지 않게 기록해 둔다.
@@ -49,17 +55,21 @@ namespace Game.Combat
             if (target == null || !target.IsAlive) return;
 
             // HashSet.Add는 이미 들어 있으면 false를 돌려준다. 넣기와 중복 검사가 한 번에 된다.
-            if (!_hitThisSwing.Add(target)) return;
+            if (!continuous && !_hitThisSwing.Add(target)) return;
 
             // Mathf.Sign은 0에 대해 +1을 돌려준다. 정확히 겹쳐 있으면 오른쪽으로 민다.
             float dir = Mathf.Sign(other.bounds.center.x - origin.position.x);
 
-            target.TakeDamage(new DamageInfo
+            bool landed = target.TakeDamage(new DamageInfo
             {
                 amount = config.damage,
                 knockback = new Vector2(dir * config.knockbackSpeed, config.knockbackLift),
                 source = origin.gameObject,
             });
+
+            // 무적으로 무시된 타격에는 연출을 내지 않는다. 슬라이드로 적을 통과할 때마다
+            // 화면이 멈추고 흔들리면 "무적으로 뚫었다"가 "맞았다"로 읽힌다.
+            if (!landed) return;
 
             Hitstop.Play(config.hitstop);
             if (_impulse != null && config.shakeForce > 0f)

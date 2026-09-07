@@ -30,7 +30,12 @@ namespace Game.Combat
     /// </summary>
     public interface IDamageable
     {
-        void TakeDamage(DamageInfo info);
+        /// <summary>
+        /// 피해를 준다. 실제로 들어갔으면 true, 무적 등으로 무시됐으면 false.
+        /// 때린 쪽은 이 값을 보고 히트스톱·화면 흔들림을 낼지 정한다 —
+        /// 안 맞은 대상에게 연출이 나가면 "맞았는데 안 아픈" 것처럼 보인다.
+        /// </summary>
+        bool TakeDamage(DamageInfo info);
 
         /// <summary>이미 죽은 대상을 다시 때리지 않기 위한 확인용.</summary>
         bool IsAlive { get; }
