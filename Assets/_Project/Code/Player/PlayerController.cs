@@ -43,6 +43,10 @@ namespace Game.Player
         private bool _wasDescending;     // 이번 슬라이드 중 내리막(grade&lt;0)을 탄 적이 있는가
         private Vector2 _groundNormal = Vector2.up;   // 발밑 지면의 법선. 평지면 (0,1)
 
+        // 접촉면 조회용. 매 프레임 새로 만들면 쓰레기가 쌓이므로 미리 잡아둔다.
+        private readonly ContactPoint2D[] _contactBuf = new ContactPoint2D[8];
+        private ContactFilter2D _groundFilter;
+
         /// <summary>
         /// 지면의 기울기 = tan(경사각). 오른쪽이 오르막이면 양수, 내리막이면 음수, 평지면 0.
         /// 수평 속도 vx로 경사면을 따라가려면 세로 속도가 vx * 이 값이어야 한다.
@@ -75,6 +79,10 @@ namespace Game.Player
             _rb.freezeRotation = true;             // 캐릭터가 굴러다니지 않게
             _rb.interpolation = RigidbodyInterpolation2D.Interpolate;
             _rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+
+            _groundFilter = new ContactFilter2D();
+            _groundFilter.SetLayerMask(groundLayer);
+            _groundFilter.useTriggers = false;
 
             // 에셋을 그대로 쓰면 안 된다.
             // InputSystem_Actions는 프로젝트 전역 입력 에셋이라 Unity가 스스로 켜고 끄는데,
@@ -192,12 +200,46 @@ namespace Game.Player
 
             // 광선 시작점이 플레이어 콜라이더 안이지만 groundLayer로 걸러 쏘므로 자기 자신은 맞지 않는다.
             var hit = Physics2D.Raycast(b.center, Vector2.down, reach, groundLayer);
-            if (!hit) return Vector2.up;
 
             // 너무 가파른 면은 경사로 취급하지 않는다. 그대로 두면 tan이 폭증해
             // 수평 속도가 세로 속도로 증폭되면서 벽을 타고 튀어오른다.
             float minNormalY = Mathf.Cos(config.maxSlopeAngle * Mathf.Deg2Rad);
-            return hit.normal.y >= minNormalY ? hit.normal : Vector2.up;
+            Vector2 normal = (hit && hit.normal.y >= minNormalY) ? hit.normal : Vector2.up;
+
+            return ClimbContactNormal(b, normal, minNormalY);
+        }
+
+        /// <summary>
+        /// 캡슐 앞면이 이미 오르막에 닿아 있는데 중심 광선은 그 아래 평지를 먼저 맞는 구간이 있다.
+        /// 램프 아래끝을 바닥에 묻으면 반드시 생긴다 — 램프 표면이 바닥 위로 올라오기 전에
+        /// 캡슐의 앞쪽이 먼저 그 면에 닿기 때문이다.
+        ///
+        /// 그 구간에서 경사가 평지로 읽히면 vy가 -groundStickSpeed로 고정되어 아래로 눌리는데,
+        /// 캡슐은 경사면을 벽처럼 밀기만 하므로 올라갈 방법이 없다. 40도에서는 잠깐 버벅이고 말지만
+        /// 45도에서는 완전히 멈춘다 (실측: vx 9 -> 1.100에서 영구 정지).
+        ///
+        /// 진행 방향 앞쪽을 광선으로 미리 보는 방식은 쓰면 안 된다 — 평지에서 램프에 닿기도 전에
+        /// vy가 붙어 플레이어가 발사된다. 그래서 '실제로 닿아 있는 면'만 본다.
+        /// </summary>
+        private Vector2 ClimbContactNormal(Bounds b, Vector2 normal, float minNormalY)
+        {
+            // 가려는 방향이 있어야 '밀고 올라갈 면'을 고를 수 있다.
+            float vx = _rb.linearVelocity.x;
+            float dir = Mathf.Abs(vx) > 0.05f ? Mathf.Sign(vx)
+                      : (Mathf.Abs(_moveInput) > 0.01f ? Mathf.Sign(_moveInput) : 0f);
+            if (dir == 0f) return normal;
+
+            int count = _collider.GetContacts(_groundFilter, _contactBuf);
+            for (int i = 0; i < count; i++)
+            {
+                Vector2 n = _contactBuf[i].normal;
+                if (n.y < minNormalY) continue;                                   // 벽이거나 오르기엔 너무 가파르다
+                if (n.x * dir >= 0f) continue;                                    // 밀고 들어가는 오르막만 본다
+                if ((_contactBuf[i].point.x - b.center.x) * dir <= 0f) continue;  // 뒤에 두고 온 면은 무시.
+                                                                                  // 없으면 램프 끝에서 뒤꿈치가 계속 밀어 올려 통통 튄다
+                if (n.y < normal.y) normal = n;                                   // 더 가파른 쪽이 지금 올라야 할 면이다
+            }
+            return normal;
         }
 
         private void TryJump()
@@ -259,9 +301,15 @@ namespace Game.Player
 
             float slideTarget = config.maxSpeed - grade * config.slopeDashBonus;
 
-            // 같은 dashDecel이 마찰이자 경사 가속도다. 목표가 위면 가속, 아래면 감속으로 저절로 갈린다.
+            // 붙는 속도(경사 가속)와 깎이는 속도(마찰)를 따로 쓴다.
+            // 하나로 묶으면 경사 이득을 키우는 순간 평지 슬라이드 거리가 같이 줄어든다.
+            // 램프는 짧아서(45도 4칸 = 0.14초) 천장이 아니라 이 가속도가 실제 이득을 정한다 —
+            // 하나로 묶여 있을 때는 4칸 내리막의 이득이 정확히 0이었다(최고 속도가 진입값 32 그대로).
+            float speedAlong = _rb.linearVelocity.x * _dashDir;
+            float rate = slideTarget > speedAlong ? config.slopeDashAccel : config.dashDecel;
+
             float vx = Mathf.MoveTowards(_rb.linearVelocity.x, _dashDir * slideTarget,
-                                         config.dashDecel * Time.fixedDeltaTime);
+                                         rate * Time.fixedDeltaTime);
             _rb.linearVelocity = new Vector2(vx, _rb.linearVelocity.y);
 
             // 평소 달리기 속도까지 마찰로 떨어졌거나 발판을 벗어나면 슬라이드가 끝난다.
