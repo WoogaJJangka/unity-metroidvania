@@ -21,7 +21,9 @@ description: >
 | 네임스페이스 | `Game.<영역>` | `Game.Player`, `Game.Combat`, `Game.Quest`, `Game.World`, `Game.UI`, `Game.Save` |
 | 맵 단위 | 맵 1개 = 씬 1개 (`Scenes/Maps/`) | 메이플식 맵 전환형 구조 |
 | 미니게임 | Additive 로드 (`Scenes/MiniGames/`) | 종료 시 언로드하고 결과만 퀘스트로 반환 |
-| 전역 상태 | `_Bootstrap` 씬의 `GameManager` + `DontDestroyOnLoad` | 어느 씬에서 Play를 눌러도 동작해야 함 |
+| 전역 상태 | `GameManager`가 `[RuntimeInitializeOnLoadMethod]`로 **스스로 생성** + `DontDestroyOnLoad` | 어느 씬에서 Play를 눌러도 동작해야 함. `_Bootstrap` 씬을 두면 "그 씬부터 시작해야 한다"는 제약이 생기므로 쓰지 않는다 |
+| 맵 전환 구현 | `GameManager.TravelTo(씬, 스폰id)` — 페이드·비동기 로드·스폰 배치를 한 코루틴에서 처리 | 책임이 하나뿐이라 별도 `SceneTransitionManager` 클래스를 두지 않았다. 전환에 다른 책임(로딩 화면, 스트리밍)이 붙으면 그때 분리 |
+| 플레이어 소유 | 맵 씬마다 각자 배치. 도착 시 `GameManager`가 `SpawnPoint`로 옮긴다 | 플레이어를 `DontDestroyOnLoad`로 만들면 맵 씬에서 바로 Play할 수 없다. 대신 **체력·능력 같은 지속 상태는 플레이어가 아니라 `GameManager`가 들어야 한다** (Phase 5) |
 | 맵 이동 | 포털 트리거 → `{대상 씬 이름, 스폰 포인트 ID}` | 씬 이름만으로는 "어디로 나오는지"가 안 정해짐 |
 | 튜닝 수치 | 전부 ScriptableObject (`Assets/_Project/Data/`) | MonoBehaviour 필드는 플레이 종료 시 되돌아감 → 튜닝 불가 |
 
@@ -53,7 +55,7 @@ ScriptableObject는 "씬에 존재하지 않는 데이터 덩어리"다. 현재 
 
 각 Phase에서 결정되면 이 문서에 위 표 형식으로 추가한다.
 
-- [ ] **Phase 2** — `SceneTransitionManager` 비동기 로드·페이드 인터페이스, 레이어/Sorting Layer 최종 목록
+- [ ] **Phase 2 (일부 남음)** — Sorting Layer 최종 목록. 지금은 모든 스프라이트가 `Default` 하나뿐이라 배경 아트가 들어오는 시점에 정한다. 타일맵도 같은 이유로 보류 (타일 아트가 없다)
 - [ ] **Phase 4** — `AbilityFlags`(enum flags)를 누가 소유하는가: `GameManager` vs 별도 `PlayerState`
 - [ ] **Phase 5** — `SaveData` 스키마와 버전 마이그레이션 정책. 저장 항목: 현재 씬·위치, 체력, 능력 플래그, 퀘스트 진행, 획득 아이템, 열린 지름길
 - [ ] **Phase 6** — 퀘스트 상태를 세이브에 어떻게 싣는가. ink 텍스트 → ScriptableObject 임포터 위치

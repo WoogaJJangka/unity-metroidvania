@@ -78,6 +78,49 @@ namespace Game.Player
                  "공중에 뜬 채로 굳는다. 경사나 이음새에서 튀지 않게 하는 역할도 한다")]
         public float groundStickSpeed = 2f;
 
+        [Header("지상 대시 슬라이드")]
+        [Tooltip("슬라이드 출발 속도 (units/sec). maxSpeed보다 충분히 커야 '치고 나간다'는 느낌이 난다")]
+        public float dashSpeed = 32f;
+
+        [Tooltip("슬라이드 중 마찰 감속도 (units/sec²). 속도가 maxSpeed까지 떨어지면 슬라이드가 끝난다. " +
+                 "고정 지속 시간은 없고 이 값이 슬라이드 길이를 정한다")]
+        public float dashDecel = 50f;
+
+        [Tooltip("공중에서 maxSpeed를 넘는 속도(슬라이드로 얻은 모멘텀)가 깎이는 감속도 (units/sec²). " +
+                 "작을수록 슬라이드 → 점프 → 슬라이드로 속도가 잘 이어진다. 이 값이 크면 " +
+                 "공중에서 속도가 증발해 연계가 끊긴다")]
+        public float momentumDecel = 12f;
+
+        [Tooltip("접지 중 모멘텀 감속도 (units/sec²). 내리막에서 번 속도가 평지에서 maxSpeed까지 " +
+                 "떨어지는 거리를 정한다 — 거리 = (진입속도² - maxSpeed²) / (2 x 이 값). " +
+                 "작을수록 경사에서 번 속도가 멀리까지 실려 나간다. 거리는 속도의 제곱으로 늘어나므로 " +
+                 "이 값만 정해두면 '빠를수록 멀리'는 저절로 성립한다. " +
+                 "공중값과 나눈 이유는 공중값을 올리면 슬라이드 점프 연계가 끊기기 때문")]
+        public float groundMomentumDecel = 35f;
+
+        [Tooltip("대시가 끝난 뒤 다시 쓸 수 있을 때까지의 시간 (sec)")]
+        public float dashCooldown = 0.15f;
+
+        [Header("경사")]
+        [Tooltip("걸어 올라갈 수 있는 최대 경사각 (도). 이보다 가파르면 경사로 취급하지 않아 " +
+                 "수평 속도가 세로 속도로 증폭되며 튀어오르는 일을 막는다")]
+        [Range(0f, 80f)]
+        public float maxSlopeAngle = 50f;
+
+        [Tooltip("내리막 슬라이드가 도달할 수 있는 속도의 천장 (units/sec). " +
+                 "경사 1(45도)당 이만큼 maxSpeed 위로 목표가 올라간다 — 45도면 9 + 이 값. " +
+                 "오르막에서는 반대로 목표가 내려가 더 빨리 끝난다. 0이면 경사 가속 없음. " +
+                 "주의: 목표(maxSpeed + 경사 x 이 값)가 dashSpeed보다 낮으면 내리막이 가속이 아니라 " +
+                 "감속이 된다 — 평지에서 그냥 슬라이드하는 것보다 느려져 경사를 탈 이유가 없어진다")]
+        public float slopeDashBonus = 45f;
+
+        [Tooltip("내리막 슬라이드가 목표 속도로 붙는 가속도 (units/sec²). " +
+                 "**천장(slopeDashBonus)이 아니라 이 값이 실제 이득을 정한다** — 램프는 짧아서 " +
+                 "(45도 4칸 = 0.14초) 천장에 닿기 전에 끝나기 때문이다. " +
+                 "마찰(dashDecel)과 따로 두는 이유: 하나로 묶으면 경사 가속을 키울 때 평지 슬라이드 " +
+                 "거리가 같이 줄어든다")]
+        public float slopeDashAccel = 110f;
+
         [Header("모서리 보정")]
         [Tooltip("상승 중 머리가 천장 모서리에 걸릴 때 옆으로 밀어줄 최대 거리. 0이면 비활성")]
         public float cornerCorrectionDistance = 0.25f;
