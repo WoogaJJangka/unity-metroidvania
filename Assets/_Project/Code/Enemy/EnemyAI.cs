@@ -41,6 +41,7 @@ namespace Game.Enemy
         private Transform _target;
         private float _facing = -1f;
         private float _fireTimer;
+        private float _hitstunTimer;   // 넉백이 멎은 뒤 남은 경직 시간
 
         private void Awake()
         {
@@ -51,8 +52,17 @@ namespace Game.Enemy
         }
 
         // 이벤트 구독은 OnEnable, 해제는 OnDisable에서 짝을 맞춘다 (CLAUDE.md 규칙).
-        private void OnEnable() => _health.Died += OnDied;
-        private void OnDisable() => _health.Died -= OnDied;
+        private void OnEnable()
+        {
+            _health.Died += OnDied;
+            _health.Damaged += OnDamaged;
+        }
+
+        private void OnDisable()
+        {
+            _health.Died -= OnDied;
+            _health.Damaged -= OnDamaged;
+        }
 
         // 플레이어는 Awake가 아니라 Start에서 찾는다. Awake 순서는 보장되지 않지만
         // 모든 Awake는 모든 Start보다 먼저 돈다.
@@ -64,6 +74,10 @@ namespace Game.Enemy
         }
 
         private void OnDied() => State = EnemyState.Dead;
+
+        // 경직은 맞는 즉시 채우고 넉백이 멎은 뒤부터 줄인다. 그래야 "밀려나다가 멈춰서
+        // 잠깐 굳는다"가 되고, 벽에 부딪혀 넉백이 일찍 끝나도 굳는 시간은 그대로다.
+        private void OnDamaged(DamageInfo info) => _hitstunTimer = config.hitstun;
 
         // 물리는 FixedUpdate에서 처리한다 (CLAUDE.md 규칙).
         private void FixedUpdate()
@@ -77,6 +91,17 @@ namespace Game.Enemy
                 State = EnemyState.Hurt;
                 return;
             }
+
+            // 넉백이 멎은 뒤에도 잠깐 못 움직인다. 이 틈이 밀치기 -> 슬라이드 연계의 자리다.
+            // 없으면 밀려나기를 끝내는 순간 chaseSpeed로 되붙어서, 거리를 벌어도 쓸 틈이 없다.
+            if (_hitstunTimer > 0f)
+            {
+                _hitstunTimer -= Time.fixedDeltaTime;
+                State = EnemyState.Hurt;
+                Move(0f);
+                return;
+            }
+
             if (State == EnemyState.Hurt) State = EnemyState.Chase;   // 맞았으면 때린 쪽을 쫓는다
 
             // 대상이 없으면 거리를 무한으로 봐서 자연히 순찰로 떨어진다.

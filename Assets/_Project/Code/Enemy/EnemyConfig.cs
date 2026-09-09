@@ -37,6 +37,12 @@ namespace Game.Enemy
         [Tooltip("탄이 스스로 사라지기까지의 시간 (sec). 지형에 막히지 않아도 이 시간이면 사라진다")]
         public float projectileLife = 3f;
 
+        [Header("피격")]
+        [Tooltip("넉백이 멎은 뒤 아무것도 못 하는 시간 (sec). 0이면 멈추는 즉시 다시 달려든다 — " +
+                 "밀치기로 거리를 벌어도 곧바로 붙어서 슬라이드로 넘어갈 틈이 없다. " +
+                 "실제 총 경직 = 넉백 시간(knockbackSpeed / knockbackDecay) + 이 값")]
+        public float hitstun = 0.25f;
+
         [Header("지형 감지")]
         [Tooltip("발밑 낭떠러지를 확인할 때 앞으로 내다보는 거리")]
         public float ledgeCheckAhead = 0.7f;

@@ -16,6 +16,19 @@ namespace Game.Combat
         [Tooltip("깎을 체력")]
         public float damage = 1f;
 
+        [Tooltip("때린 쪽의 수평 속도에 비례해 피해를 조절하는 기준 속도 (units/sec). " +
+                 "0이면 속도와 무관하게 damage 그대로 (기본). " +
+                 "실제 피해 = damage x (때린 쪽 |vx| / 이 값) — 이 속도에서 damage가 그대로 들어가고 " +
+                 "느리면 덜, 빠르면 더 아프다. 슬라이드에 dashSpeed를 넣으면 " +
+                 "'진입 속도 = 표기 피해', 경사로 더 붙인 속도가 그대로 화력이 된다")]
+        public float speedDamageReference = 0f;
+
+        [Tooltip("속도 비례 곡선의 지수. 1이면 속도에 정비례해서 " +
+                 "피해 차이가 속도 차이를 절대 못 넘는다 — 50과 31로 때려도 1.6배가 천장이다. " +
+                 "2면 제곱이라 같은 속도 폭에서 2.6배까지 벌어지고, 기준 속도 아래는 " +
+                 "빠르게 무력해진다(속도를 잃으면 위험하다). 0이면 속도와 무관하게 damage 고정")]
+        public float speedDamageExponent = 1f;
+
         [Tooltip("맞은 쪽이 뒤로 밀리는 속도 (units/sec)")]
         public float knockbackSpeed = 10f;
 

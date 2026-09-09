@@ -36,6 +36,7 @@ MonoBehaviour:
   momentumDecel: 12
   groundMomentumDecel: 35
   dashCooldown: 0.15
+  invincibleSpeed: 12
   maxSlopeAngle: 50
   slopeDashBonus: 45
   slopeDashAccel: 110

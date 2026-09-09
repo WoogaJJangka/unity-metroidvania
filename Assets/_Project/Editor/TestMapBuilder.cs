@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEditor;
 using UnityEngine.Tilemaps;
+using Game.Combat;
+using Game.Enemy;
 
 namespace Game.EditorTools
 {
@@ -17,7 +19,17 @@ namespace Game.EditorTools
     public static class TestMapBuilder
     {
         // ── 구간 경계 (x) ──
-        const float Z1 = 0f, Z2 = 82f, Z3 = 202f, Z4 = 322f, Z5 = 484f, END = 580f;
+        const float Z1 = 0f, Z2 = 82f, Z3 = 202f, Z4 = 322f, Z5 = 484f, END = 648f;
+
+        // ── Zone5 경사 시험 레인 ──
+        // 8칸 45도 언덕에서 내려와 정지 더미 3기를 차례로 스친다. 속도 비례 피해를 재는 곳이라
+        // 더미 간격이 곧 측정 지점이다 — 내리막을 벗어난 뒤 groundMomentumDecel(35)로 깎이므로
+        // v² = v0² - 2 x 35 x 거리. 진입 46 기준 대략 45 / 36 / 22 에서 맞는다.
+        const float LaneX0 = 578f;                // 레인 왼쪽 끝 (아레나와 2유닛 틈)
+        const float LaneRampUp = 582f;            // 오르막 낮은 끝
+        const float LaneFoot = LaneRampUp + 24f;  // 내리막이 평지에 닿는 x (= 606)
+        const float LaneX1 = 646f;
+        static readonly float[] DummyOffsets = { 2f, 12f, 24f };
 
         const float FloorTop = 0f;       // 주 바닥 윗면
         const float FloorThick = 12f;    // 화면 아래로 뚫고 나갈 만큼. 바닥이 공중에 뜬 판자로 안 보이게 한다
@@ -168,6 +180,45 @@ namespace Game.EditorTools
             Box(g, "ShooterDeck", 517f, 1.5f, 10f, 3f, C5);
             Box(g, "Cover_L", 496.5f, 1f, 1f, 2f, CProp);
             Box(g, "Cover_R", 545.5f, 1f, 1f, 2f, CProp);
+
+            // ── 경사 시험 레인 ──
+            // 아레나와 2유닛 틈을 둔다. 적은 발밑 낭떠러지에서 돌아서므로 레인으로 넘어오지 않는다.
+            Floor(g, "SlopeLane", LaneX0, LaneX1, FloorTop, C5);
+            Ramp(g, "LaneRampUp_8", LaneRampUp, 0f, 8f, true, C5);
+            Box(g, "LaneDeck", LaneRampUp + 12f, 3f, 8f, 10f, C5, true, true, false);
+            Ramp(g, "LaneRampDown_8", LaneRampUp + 16f, 8f, 8f, false, C5);
+
+            // 램프가 바닥 조각의 끝면에 맞닿는 자리. 안 덮으면 벽면 타일이 언덕 속에 세로로 남는다.
+            CapFloorEdge(Mathf.RoundToInt(LaneX0), 0);
+
+            // 걸어서 오면 한참이다. 숫자키 6으로 바로 온다 (DebugWarp가 ZoneStart_N을 찾는다).
+            var stop = new GameObject("ZoneStart_6");
+            stop.transform.SetParent(g, false);
+            stop.transform.localPosition = new Vector3(LaneX0 + 2f, 1.5f, 0f);
+        }
+
+        /// <summary>
+        /// 가만히 서서 맞아주는 적의 설정. 순찰·추격 속도가 0이고 감지 거리도 0이라
+        /// 상태가 Patrol에서 안 변한다. 속도 비례 피해를 재려면 대상이 안 움직여야 한다 —
+        /// 움직이는 적은 어느 속도에서 맞았는지 알 수가 없다.
+        /// 없으면 만들고 있으면 갱신한다. 지워도 다시 생긴다.
+        /// </summary>
+        static EnemyConfig DummyConfigAsset()
+        {
+            const string path = "Assets/_Project/Data/DummyConfig.asset";
+            var cfg = AssetDatabase.LoadAssetAtPath<EnemyConfig>(path);
+            if (cfg == null)
+            {
+                cfg = ScriptableObject.CreateInstance<EnemyConfig>();
+                AssetDatabase.CreateAsset(cfg, path);
+            }
+            cfg.patrolSpeed = 0f;
+            cfg.chaseSpeed = 0f;
+            cfg.detectRange = 0f;
+            cfg.loseRange = 0.1f;    // detectRange와 같으면 경계에서 상태가 덜덜 떤다
+            cfg.attackRange = 0f;
+            EditorUtility.SetDirty(cfg);
+            return cfg;
         }
 
         // ─────────────────────────── 표식과 배우 ───────────────────────────
@@ -198,6 +249,7 @@ namespace Game.EditorTools
             Move("Player", new Vector3(Z1 + 3f, 1.5f, 0f));
             Move("SpawnPoint_from_B", new Vector3(Z1 + 6f, 1f, 0f));
             Move("Portal_to_B", new Vector3(Z2 - 6f, 1f, 0f));
+            RestoreCamera();
 
             var enemies = GameObject.Find("/Enemies");
             if (enemies == null) return;
@@ -221,6 +273,57 @@ namespace Game.EditorTools
             c2.name = "Enemy_Chaser_2(clone)";
             var s2 = Object.Instantiate(shooter, new Vector3(570f, 0.5f, 0f), Quaternion.identity, enemies.transform);
             s2.name = "Enemy_Shooter_2(clone)";
+
+            PlaceDummies(chaser, enemies.transform);
+
+            // 속도 비례 피해는 눈에 안 보인다. 체력 UI가 생기기 전까지 이 표시가 대신한다.
+            var tools = GameObject.Find("DebugTools");
+            if (tools != null && tools.GetComponent<Game.Utils.DebugStats>() == null)
+                tools.AddComponent<Game.Utils.DebugStats>();
+        }
+
+        /// <summary>정지 더미 3기. 근접 적을 복제해 설정만 갈아 끼운다 — 콜라이더·레이어·
+        /// 접촉 히트박스 배선을 통째로 다시 만들 이유가 없다.</summary>
+        static void PlaceDummies(GameObject source, Transform parent)
+        {
+            var cfg = DummyConfigAsset();
+            for (int i = 0; i < DummyOffsets.Length; i++)
+            {
+                var d = Object.Instantiate(source, new Vector3(LaneFoot + DummyOffsets[i], 0.5f, 0f),
+                                           Quaternion.identity, parent);
+                d.name = "Dummy_" + (i + 1) + "(clone)";
+
+                // config와 maxHp는 private [SerializeField]다. SerializedObject로 쓴다.
+                var ai = new SerializedObject(d.GetComponent<EnemyAI>());
+                ai.FindProperty("config").objectReferenceValue = cfg;
+                ai.ApplyModifiedProperties();
+
+                // 몇 번을 때려도 안 죽어야 반복 측정이 된다.
+                var hp = new SerializedObject(d.GetComponent<Health>());
+                hp.FindProperty("maxHp").floatValue = 999f;
+                hp.ApplyModifiedProperties();
+            }
+        }
+
+        /// <summary>
+        /// CinemachineBrain을 켜고 카메라를 vcam 자리로 되돌린다.
+        /// 에디트 모드에서 카메라를 옮겨 캡처하려면 브레인을 꺼야 하는데(안 그러면 vcam이
+        /// 도로 끌고 간다), 그걸 되돌리지 않은 채 씬을 저장하면 <b>플레이해도 카메라가
+        /// 그 자리에 그대로 멈춰 있다.</b> 증상은 "캐릭터가 안 보이고 화면이 고정"이다.
+        /// 실제로 한 번 이렇게 커밋됐다. 굽기가 씬의 원본이므로 여기서 매번 되돌린다.
+        /// </summary>
+        static void RestoreCamera()
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+
+            var brain = cam.GetComponent<Unity.Cinemachine.CinemachineBrain>();
+            if (brain != null) brain.enabled = true;
+
+            var vcam = Object.FindAnyObjectByType<Unity.Cinemachine.CinemachineCamera>();
+            if (vcam != null)
+                cam.transform.position = new Vector3(vcam.transform.position.x,
+                                                     vcam.transform.position.y, -10f);
         }
 
         static void ClearTilemap()

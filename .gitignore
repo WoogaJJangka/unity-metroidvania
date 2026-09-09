@@ -51,3 +51,7 @@ crashlytics-build.properties
 # ---- Claude Code ----
 # 스킬은 커밋한다. 머신별 로컬 설정만 제외.
 .claude/settings.local.json
+
+# Unity가 비정상 종료 시 남기는 씬 복구본. 이미 저장된 씬의 사본이라 커밋할 것이 없다.
+/[Aa]ssets/_Recovery/
+/[Aa]ssets/_Recovery.meta

@@ -58,6 +58,27 @@ namespace Game.Player
         public Vector2 Velocity => _rb.linearVelocity;
         public bool IsDashing => _isSliding;
 
+        /// <summary>
+        /// 슬라이드의 공방 판정이 살아 있는가. 기준은 슬라이드 '상태'가 아니라 <b>수평 속도</b>다 —
+        /// 빠르면 때리고 안 맞고, 느려지면 둘 다 꺼진다. 무적과 히트박스가 같은 값을 읽으므로
+        /// "안 맞는데 못 때리는" 구간이 생기지 않는다.
+        ///
+        /// 상태로 판정하면 슬라이드가 끝나는 순간(마찰·발판 이탈·점프·내리막 종료) 판정이
+        /// 절벽처럼 사라져 적을 뚫는 도중에 맞는다. 속도는 서서히 줄기만 하므로 그 경계가 없고,
+        /// 공중까지 자연히 이어진다.
+        ///
+        /// 넉백 중을 빼는 이유: 적의 몸통 넉백이 12로 임계값과 같아서, 맞고 밀려나는 것만으로
+        /// 판정이 켜져 때린 적을 되받아친다. 맞은 것이 공격이 되면 안 된다.
+        ///
+        /// 이 값을 <b>PlayerController가 직접</b> Health에 옮기는 이유는 타이밍이다.
+        /// 속도는 FixedUpdate에서 정해지는데 Unity는 FixedUpdate -> 물리 스텝(트리거 콜백)
+        /// -> Update 순으로 돈다. 무적을 Update에서 걸면 최대 2 물리 스텝(100Hz/60fps 기준 20ms)
+        /// 늦고, 그동안 적의 몸통 히트박스는 매 스텝 때린다 —
+        /// "적이 붙었을 때 슬라이드로 빠져나간다"가 바로 그 경우다.
+        /// </summary>
+        public bool AtSlideSpeed => Mathf.Abs(_rb.linearVelocity.x) >= config.invincibleSpeed
+                                    && (_health == null || !_health.IsKnockedBack);
+
         /// <summary>마지막으로 바라본 방향 (+1 오른쪽 / -1 왼쪽). 공격 방향이 이 값을 쓴다.</summary>
         public float Facing => _facing;
 
@@ -100,7 +121,13 @@ namespace Game.Player
         }
 
         private void OnEnable() => _playerMap?.Enable();
-        private void OnDisable() => _playerMap?.Disable();
+
+        private void OnDisable()
+        {
+            _playerMap?.Disable();
+            // 슬라이드 도중에 꺼지면 무적이 켜진 채로 남는다. 켠 쪽이 끈다.
+            if (_health != null) _health.Invincible = false;
+        }
 
         private void OnDestroy()
         {
@@ -150,6 +177,13 @@ namespace Game.Player
             ApplyHorizontal();
             ApplyGravity();
             CorrectCorner();
+
+            // ponytail: Health.Invincible의 유일한 기록자가 슬라이드라고 가정한다. 나중에
+            // 다른 무적(리스폰, 과열 잠금)이 생기면 매 스텝 여기서 덮이므로 카운터로 바꿀 것.
+            // 속도가 다 확정된 뒤, 이 프레임의 물리 스텝(트리거 콜백)보다 먼저 건다.
+            // 여기가 아니라 Update에서 걸면 슬라이드 시작이 무적보다 최대 2 물리 스텝 앞서
+            // 나가고, 그동안 적의 몸통 히트박스에 그대로 맞는다.
+            if (_health != null) _health.Invincible = AtSlideSpeed;
         }
 
         private void UpdateGrounded()

@@ -12,7 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c4e73aa4af6065c4cadb57c21da6b772, type: 3}
   m_Name: SlideAttackConfig
   m_EditorClassIdentifier: Assembly-CSharp::Game.Combat.AttackConfig
-  damage: 1
+  damage: 1.25
+  speedDamageReference: 32
+  speedDamageExponent: 2
   knockbackSpeed: 10
   knockbackLift: 3
   windup: 0
