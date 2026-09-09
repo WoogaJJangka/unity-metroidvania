@@ -42,6 +42,8 @@ namespace Game.EditorTools
         static readonly Color C5 = new Color(0.40f, 0.24f, 0.26f);      // 적
         static readonly Color CDeep = new Color(0.16f, 0.17f, 0.20f);   // 회수 바닥
         static readonly Color CProp = new Color(0.46f, 0.48f, 0.52f);   // 장애물
+        static readonly Color CWater = new Color(0.25f, 0.55f, 0.85f, 0.45f);  // 냉각 지형
+        static readonly Color CHot = new Color(0.90f, 0.35f, 0.15f, 0.45f);    // 가열 지형
 
         static Sprite _white;
         static Sprite _block;    // 윗면 + 좌우 벽면에 테두리. 밑면은 열려 있다
@@ -144,6 +146,23 @@ namespace Game.EditorTools
 
             // 뛰면 머리를 박는 복도. '점프하지 말고 달려서 통과' 시험.
             Box(g, "LowCeiling", 311.5f, 3.5f, 13f, 1f, CProp);
+
+            // 과열 지형. 활주로 위에 나란히 둬서 같은 속도로 지나며 차이를 본다.
+            HeatZoneBox(g, "WaterPool", 214f, 8f, 0f, CWater);   // 안 쌓인다 = 쉼터
+            HeatZoneBox(g, "HotZone", 228f, 8f, 3f, CHot);       // 세 배로 쌓인다
+        }
+
+        /// <summary>과열 배수를 바꾸는 구역. 콜라이더는 트리거라 달리는 데 방해가 없다.</summary>
+        static void HeatZoneBox(Transform parent, string name, float x0, float w, float mul, Color c)
+        {
+            var go = Box(parent, name, x0 + w * 0.5f, 2f, w, 4f, c, false, false);
+            go.GetComponent<SpriteRenderer>().sortingOrder = -2;   // 지형 뒤, 바닥 앞
+            go.AddComponent<BoxCollider2D>().isTrigger = true;
+
+            // rateMultiplier는 private [SerializeField]다. SerializedObject로 쓴다.
+            var so = new SerializedObject(go.AddComponent<Game.World.HeatZone>());
+            so.FindProperty("rateMultiplier").floatValue = mul;
+            so.ApplyModifiedProperties();
         }
 
         static void Zone4Slope()

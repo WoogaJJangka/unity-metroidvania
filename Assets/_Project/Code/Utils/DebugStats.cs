@@ -61,6 +61,13 @@ namespace Game.Utils
             GUI.Label(new Rect(12f, 8f, 720f, 34f),
                       $"vx {vx,7:F2}    {inv}    HP {_playerHealth.Current:F1}", _style);
             GUI.Label(new Rect(12f, 40f, 720f, 34f), $"마지막 타격: {_lastHit}", _style);
+
+            // 칸으로 그린다. "몇 번 더 슬라이드할 수 있는가"를 세려면 채운 칸과 빈 칸이
+            // 같이 보여야 한다.
+            string heat = new string('■', _player.Heat) + new string('□', _player.HeatMax - _player.Heat);
+            GUI.Label(new Rect(12f, 72f, 720f, 34f),
+                      $"과열 {heat} {_player.Heat}/{_player.HeatMax}"
+                      + (_player.Overheated ? "  슬라이드 막힘" : ""), _style);
         }
     }
 }

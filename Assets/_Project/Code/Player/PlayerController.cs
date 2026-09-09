@@ -42,6 +42,8 @@ namespace Game.Player
         private float _dashDir;
         private bool _wasDescending;     // 이번 슬라이드 중 내리막(grade&lt;0)을 탄 적이 있는가
         private Vector2 _groundNormal = Vector2.up;   // 발밑 지면의 법선. 평지면 (0,1)
+        private int _heat;               // 쌓인 과열 스택
+        private float _heatTimer;        // 다음 스택까지(+) / 다음 회복까지(-) 남은 시간
 
         // 접촉면 조회용. 매 프레임 새로 만들면 쓰레기가 쌓이므로 미리 잡아둔다.
         private readonly ContactPoint2D[] _contactBuf = new ContactPoint2D[8];
@@ -78,6 +80,26 @@ namespace Game.Player
         /// </summary>
         public bool AtSlideSpeed => Mathf.Abs(_rb.linearVelocity.x) >= config.invincibleSpeed
                                     && (_health == null || !_health.IsKnockedBack);
+
+        /// <summary>쌓인 과열 스택. HUD와 디버그 표시가 읽는다.</summary>
+        public int Heat => _heat;
+
+        /// <summary>과열 한계 스택 수. 0이면 과열이 꺼져 있다.</summary>
+        public int HeatMax => config.heatMaxStacks;
+
+        /// <summary>
+        /// 과열로 슬라이드가 막혀 있는가. 스택이 가득 찼는지만 보면 되므로 따로 기억하지 않는다 —
+        /// 한 칸이 식는 순간이 곧 해제라 "얼마나 식어야 풀리는가"(히스테리시스)가 공짜로 딸려온다.
+        /// 게이지였을 때는 한계에서 곧바로 풀려 한 프레임짜리 슬라이드 → 즉시 재과열이 반복됐다.
+        /// </summary>
+        public bool Overheated => config.heatMaxStacks > 0 && _heat >= config.heatMaxStacks;
+
+        /// <summary>
+        /// 지형이 과열 생성량에 곱하는 값. 물웅덩이는 0(안 쌓인다), 뜨거운 지대는 2 이상.
+        /// <see cref="Game.World.HeatZone"/>이 드나들 때 바꾼다. 냉각 속도는 안 건드린다 —
+        /// 기획서의 예시가 "생성량 조정"이고, 안 쌓이는 것만으로 물웅덩이는 이미 쉼터가 된다.
+        /// </summary>
+        public float HeatRateMultiplier { get; set; } = 1f;
 
         /// <summary>마지막으로 바라본 방향 (+1 오른쪽 / -1 왼쪽). 공격 방향이 이 값을 쓴다.</summary>
         public float Facing => _facing;
@@ -184,6 +206,10 @@ namespace Game.Player
             // 여기가 아니라 Update에서 걸면 슬라이드 시작이 무적보다 최대 2 물리 스텝 앞서
             // 나가고, 그동안 적의 몸통 히트박스에 그대로 맞는다.
             if (_health != null) _health.Invincible = AtSlideSpeed;
+
+            // 과열도 속도가 다 정해진 뒤에 센다. AtSlideSpeed가 기준이므로 무적·히트박스와
+            // 같은 값 하나를 본다 — "빠른 동안 달아오른다"가 세 시스템에서 같은 뜻이 된다.
+            UpdateHeat();
         }
 
         private void UpdateGrounded()
@@ -300,7 +326,8 @@ namespace Game.Player
         {
             if (!_isSliding) _dashCooldownTimer -= Time.fixedDeltaTime;
 
-            if (!_isSliding && _dashBufferTimer > 0f && _isGrounded && _dashCooldownTimer <= 0f)
+            if (!_isSliding && !Overheated && _dashBufferTimer > 0f && _isGrounded
+                && _dashCooldownTimer <= 0f)
             {
                 _dashBufferTimer = 0f;
                 _isSliding = true;
@@ -355,6 +382,48 @@ namespace Game.Player
         {
             _isSliding = false;
             _dashCooldownTimer = config.dashCooldown;
+        }
+
+        /// <summary>
+        /// 과열. 무한 슬라이딩을 막는 유일한 제동 장치다(기획서 "자원관리").
+        ///
+        /// 쌓는 기준은 슬라이드 '상태'가 아니라 <see cref="AtSlideSpeed"/>다. 상태로 세면
+        /// 슬라이드 → 점프 → 슬라이드 연계의 공중 구간이 공짜가 된다 — 그동안에도 무적이고
+        /// 적을 때린다. 이득 보는 구간과 대가 치르는 구간이 어긋나면 자원이 아니다.
+        ///
+        /// 타이머 하나가 양쪽을 다 센다. 빠르면 올라가고 아니면 내려가다 양 끝에서 스택을
+        /// 하나 옮기고 0으로 돌아간다. 게이지처럼 조금씩 새는 값이 아니라 칸이 통째로
+        /// 오가야 "몇 번 더 슬라이드할 수 있는가"를 셀 수 있다.
+        /// </summary>
+        private void UpdateHeat()
+        {
+            if (config.heatMaxStacks <= 0) return;   // 0이면 과열 자체가 꺼진 것
+
+            bool hot = AtSlideSpeed;
+            if (!hot && _heat <= 0) { _heatTimer = 0f; return; }   // 다 식었으면 셀 것이 없다
+
+            // 지형 배수는 쌓는 쪽에만 곱한다. 물웅덩이(0)에서는 타이머가 아예 안 흐르고,
+            // 뜨거운 지대(3)에서는 세 배로 흐른다. 식는 속도는 지형과 무관하다.
+            _heatTimer += hot
+                ? Time.fixedDeltaTime * HeatRateMultiplier
+                : -Time.fixedDeltaTime;
+
+            if (_heatTimer >= config.heatPerStack)
+            {
+                _heatTimer = 0f;
+                if (_heat < config.heatMaxStacks) _heat++;
+
+                // 한 칸을 채우며 가득 찼으면 달리던 슬라이드도 여기서 끊는다. 안 끊으면
+                // 긴 내리막 하나로 한계를 넘긴 채 끝까지 미끄러져 "막힌다"가 체감되지 않는다.
+                // 속도는 안 건드린다 — 번 모멘텀은 momentumDecel로 자연스럽게 빠진다.
+                // 의족이 지친 것이지 벽에 부딪힌 게 아니다.
+                if (Overheated && _isSliding) EndSlide();
+            }
+            else if (_heatTimer <= -config.heatRecoverTime)
+            {
+                _heatTimer = 0f;
+                _heat--;
+            }
         }
 
         private void ApplyHorizontal()
