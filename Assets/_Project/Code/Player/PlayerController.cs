@@ -334,6 +334,13 @@ namespace Game.Player
                 _dashDir = _facing;
                 _wasDescending = false;
 
+                // 넉백은 여기서 끝난다. 아래에서 속도를 우리가 정하기 시작하므로
+                // Health는 더 이상 그 속도를 0까지 깎을 수 없고, 그러면 넉백 상태가
+                // 슬라이드 내내 붙어 있는다 — IsKnockedBack이 true인 동안은
+                // AtSlideSpeed가 false라 무적·히트박스·과열이 전부 죽는다.
+                // 증상은 "맞고 나서 슬라이드하면 과열이 안 쌓이고 적도 못 뚫는다"였다.
+                if (_health != null) _health.EndKnockback();
+
                 // 여기가 모멘텀 체이닝의 핵심. 슬라이드 점프로 얻은 속도를 안고 착지해
                 // 다시 슬라이드하면 dashSpeed로 깎이는 게 아니라 그 속도가 그대로 이어진다.
                 float entrySpeed = Mathf.Max(config.dashSpeed, Mathf.Abs(_rb.linearVelocity.x));
