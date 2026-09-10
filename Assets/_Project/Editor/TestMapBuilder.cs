@@ -1,8 +1,6 @@
 using UnityEngine;
 using UnityEditor;
 using UnityEngine.Tilemaps;
-using Game.Combat;
-using Game.Enemy;
 
 namespace Game.EditorTools
 {
@@ -216,30 +214,6 @@ namespace Game.EditorTools
             stop.transform.localPosition = new Vector3(LaneX0 + 2f, 1.5f, 0f);
         }
 
-        /// <summary>
-        /// 가만히 서서 맞아주는 적의 설정. 순찰·추격 속도가 0이고 감지 거리도 0이라
-        /// 상태가 Patrol에서 안 변한다. 속도 비례 피해를 재려면 대상이 안 움직여야 한다 —
-        /// 움직이는 적은 어느 속도에서 맞았는지 알 수가 없다.
-        /// 없으면 만들고 있으면 갱신한다. 지워도 다시 생긴다.
-        /// </summary>
-        static EnemyConfig DummyConfigAsset()
-        {
-            const string path = "Assets/_Project/Data/DummyConfig.asset";
-            var cfg = AssetDatabase.LoadAssetAtPath<EnemyConfig>(path);
-            if (cfg == null)
-            {
-                cfg = ScriptableObject.CreateInstance<EnemyConfig>();
-                AssetDatabase.CreateAsset(cfg, path);
-            }
-            cfg.patrolSpeed = 0f;
-            cfg.chaseSpeed = 0f;
-            cfg.detectRange = 0f;
-            cfg.loseRange = 0.1f;    // detectRange와 같으면 경계에서 상태가 덜덜 떤다
-            cfg.attackRange = 0f;
-            EditorUtility.SetDirty(cfg);
-            return cfg;
-        }
-
         // ─────────────────────────── 표식과 배우 ───────────────────────────
 
         static void Markers()
@@ -262,6 +236,19 @@ namespace Game.EditorTools
             }
         }
 
+        /// <summary>
+        /// 어떤 적이 어디에 서는가. 굽기가 이 표대로 프리팹을 심는다.
+        /// 적을 늘리거나 옮기려면 씬이 아니라 여기를 고친다.
+        /// </summary>
+        static readonly (string prefab, float x, float y)[] EnemySpots =
+        {
+            // 콜라이더가 1x1 중심이라 바닥 윗면 + 0.5가 정확한 안착 높이다.
+            ("Enemy_Chaser",  Z5 + 8f, 0.5f),
+            ("Enemy_Chaser",  556f,    0.5f),
+            ("Enemy_Shooter", 517f,    3.5f),   // ShooterDeck 윗면 y=3
+            ("Enemy_Shooter", 570f,    0.5f),
+        };
+
         static void PlaceActors()
         {
             // 플레이어와 포털은 1구간에, 적은 5구간에 둔다.
@@ -271,29 +258,20 @@ namespace Game.EditorTools
             RestoreCamera();
 
             var enemies = GameObject.Find("/Enemies");
-            if (enemies == null) return;
+            if (enemies == null) enemies = new GameObject("Enemies");
 
-            // 이전에 구운 사본을 지운다. 다시 구울 때마다 쌓이면 안 된다.
+            // 지형과 똑같이 통째로 비우고 다시 심는다. 예전에는 씬에 손으로 놔둔 원본 2기를
+            // 찾아 복제했는데, 그러면 원본이 사라지는 순간 굽기가 조용히 아무것도 안 했다.
             for (int i = enemies.transform.childCount - 1; i >= 0; i--)
-            {
-                var c = enemies.transform.GetChild(i).gameObject;
-                if (c.name.EndsWith("(clone)")) Object.DestroyImmediate(c);
-            }
+                Object.DestroyImmediate(enemies.transform.GetChild(i).gameObject);
 
-            var chaser = GameObject.Find("/Enemies/Enemy_Chaser");
-            var shooter = GameObject.Find("/Enemies/Enemy_Shooter");
-            if (chaser == null || shooter == null) return;
+            foreach (var spot in EnemySpots)
+                SpawnEnemy(spot.prefab, spot.x, spot.y, enemies.transform);
 
-            // 콜라이더가 1x1 중심이라 바닥 윗면 + 0.5가 정확한 안착 높이다.
-            chaser.transform.position = new Vector3(Z5 + 8f, 0.5f, 0f);
-            shooter.transform.position = new Vector3(517f, 3.5f, 0f);   // ShooterDeck 윗면 y=3
-
-            var c2 = Object.Instantiate(chaser, new Vector3(556f, 0.5f, 0f), Quaternion.identity, enemies.transform);
-            c2.name = "Enemy_Chaser_2(clone)";
-            var s2 = Object.Instantiate(shooter, new Vector3(570f, 0.5f, 0f), Quaternion.identity, enemies.transform);
-            s2.name = "Enemy_Shooter_2(clone)";
-
-            PlaceDummies(chaser, enemies.transform);
+            // 정지 더미. 속도 비례 피해를 재려면 대상이 안 움직여야 한다 —
+            // 움직이는 적은 어느 속도에서 맞았는지 알 수가 없다.
+            foreach (float offset in DummyOffsets)
+                SpawnEnemy("Enemy_Dummy", LaneFoot + offset, 0.5f, enemies.transform);
 
             // 속도 비례 피해는 눈에 안 보인다. 체력 UI가 생기기 전까지 이 표시가 대신한다.
             var tools = GameObject.Find("DebugTools");
@@ -301,27 +279,19 @@ namespace Game.EditorTools
                 tools.AddComponent<Game.Utils.DebugStats>();
         }
 
-        /// <summary>정지 더미 3기. 근접 적을 복제해 설정만 갈아 끼운다 — 콜라이더·레이어·
-        /// 접촉 히트박스 배선을 통째로 다시 만들 이유가 없다.</summary>
-        static void PlaceDummies(GameObject source, Transform parent)
+        /// <summary>
+        /// 적 프리팹 한 기를 심는다. <b>복제(Instantiate)가 아니라 프리팹 인스턴스</b>다 —
+        /// 프리팹을 고치면 심어둔 적이 전부 따라온다. 복제본은 그 연결이 없어서
+        /// 히트박스 배선 하나를 고치려면 씬의 모든 적을 손으로 고쳐야 했다.
+        /// </summary>
+        static void SpawnEnemy(string prefabName, float x, float y, Transform parent)
         {
-            var cfg = DummyConfigAsset();
-            for (int i = 0; i < DummyOffsets.Length; i++)
-            {
-                var d = Object.Instantiate(source, new Vector3(LaneFoot + DummyOffsets[i], 0.5f, 0f),
-                                           Quaternion.identity, parent);
-                d.name = "Dummy_" + (i + 1) + "(clone)";
+            string path = "Assets/_Project/Prefabs/Enemies/" + prefabName + ".prefab";
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (prefab == null) { Debug.LogError("[TestMapBuilder] 프리팹 없음: " + path); return; }
 
-                // config와 maxHp는 private [SerializeField]다. SerializedObject로 쓴다.
-                var ai = new SerializedObject(d.GetComponent<EnemyAI>());
-                ai.FindProperty("config").objectReferenceValue = cfg;
-                ai.ApplyModifiedProperties();
-
-                // 몇 번을 때려도 안 죽어야 반복 측정이 된다.
-                var hp = new SerializedObject(d.GetComponent<Health>());
-                hp.FindProperty("maxHp").floatValue = 999f;
-                hp.ApplyModifiedProperties();
-            }
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+            go.transform.position = new Vector3(x, y, 0f);
         }
 
         /// <summary>

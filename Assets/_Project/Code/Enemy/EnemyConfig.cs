@@ -43,6 +43,11 @@ namespace Game.Enemy
                  "실제 총 경직 = 넉백 시간(knockbackSpeed / knockbackDecay) + 이 값")]
         public float hitstun = 0.25f;
 
+        [Tooltip("죽은 뒤 시체가 사라지기까지의 시간 (sec). 0이면 맞는 즉시 증발한다 — " +
+                 "그러면 마지막 타격이 '죽였다'가 아니라 '사라졌다'로 읽힌다. " +
+                 "이 시간 동안 시체는 넉백을 그대로 안고 날아가며 서서히 투명해진다")]
+        public float deathTime = 0.35f;
+
         [Header("지형 감지")]
         [Tooltip("발밑 낭떠러지를 확인할 때 앞으로 내다보는 거리")]
         public float ledgeCheckAhead = 0.7f;

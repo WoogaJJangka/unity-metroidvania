@@ -224,8 +224,52 @@ Assets/
       | 주행 중 가득 참 | `IsDashing False`로 끊기고 `vx 21.2`는 유지 |
 
     - ⏸ **수치는 미확정.** 4칸 / 0.4초 / 1초는 첫 감이다. 적과 실제로 싸워보고 정한다
-  - ⏸ **Phase 3 남은 것** — `EnemyConfig`를 쓰는 적 프리팹화(지금은 씬 오브젝트 2기),
-    적 사망 연출, 보스
+  - ✅ **적 프리팹화 완료** (2026-09-10) — Play 모드 실측 검증
+    - **문제는 "프리팹이 없다"가 아니라 "프리팹이 껍데기였다"였다.** 씬의 적 2기는
+      `TestDummy.prefab` 인스턴스였는데 Rigidbody2D·Health·EnemyAI·ContactHitbox가
+      **전부 인스턴스 오버라이드**로 얹혀 있었다. 프리팹에는 SpriteRenderer와 콜라이더뿐이라
+      히트박스 배선 하나를 고치려면 씬의 적을 하나씩 손으로 고쳐야 했다
+    - **베이스 1 + 변형(Variant) 2로 정리했다.** 두 적이 갈리는 곳은 `config`와 `projectile`
+      **두 값뿐**이라 프리팹을 따로 만들면 나머지 배선이 통째로 복제된다. 변형은 그 두 값만
+      덮어쓴다 — 실제로 베이스의 `destroyOnDeath`를 끄니 변형 둘이 그대로 따라왔다
+
+      | 에셋 | 종류 | config | projectile | maxHp |
+      |---|---|---|---|---|
+      | `Enemy_Chaser.prefab` | 베이스 | MeleeChaserConfig | 없음 | 3 |
+      | `Enemy_Shooter.prefab` | 변형 | RangedShooterConfig | EnemyBullet | 3 |
+      | `Enemy_Dummy.prefab` | 변형 | DummyConfig | 없음 | 999 |
+
+    - `TestDummy.prefab`은 `RenameAsset`으로 `Enemy_Chaser.prefab`이 됐다 —
+      **GUID가 유지되므로 참조가 안 끊긴다.** 지우고 새로 만들면 씬이 통째로 깨진다
+    - **굽기가 씬이 아니라 프리팹에서 심는다.** `TestMapBuilder.EnemySpots` 표가 원본이고,
+      `/Enemies`를 지형처럼 통째로 비우고 다시 심는다. 예전에는 씬에 손으로 둔 원본 2기를
+      찾아 `Instantiate`했는데, **원본이 사라지면 굽기가 조용히 아무것도 안 했다**
+      (`if (chaser == null) return;`). 복제가 아니라 `PrefabUtility.InstantiatePrefab`이라
+      심은 적이 프리팹 수정을 따라온다
+    - `DummyConfigAsset()`과 `PlaceDummies()`의 SerializedObject 배선은 지웠다 —
+      더미 설정을 이제 `Enemy_Dummy` 변형이 들고 있다
+    - 실측: 7기 전부 프리팹 인스턴스(컴포넌트 오버라이드 0개), 위치·설정 이전과 동일.
+      Play에서 근접형 `Patrol → Chase`(거리 5 → 2.52), 사수 `Patrol → Attack`으로
+      플레이어 HP 5 → 4, 더미 3기는 x가 정확히 고정
+  - ✅ **적 사망 연출 완료** (2026-09-10) — Play 모드 실측 검증
+    - 그전까지는 마지막 타격에 적이 **그 자리에서 증발**했다. "죽였다"가 아니라 "사라졌다"로 읽힌다
+    - **별도 컴포넌트로 빼지 않았다.** `EnemyAI`가 이미 `Health.Died`를 듣고 있고 `config`도
+      거기 있다. `OnDied()` 한 줄을 늘린 것이 전부다 — 연출이 커지면 그때 뺀다
+    - **스케일을 건드리지 않는다.** 줄어들며 사라지는 연출이 제일 흔하지만 픽셀 아트에서
+      비정수 배율은 스프라이트를 뭉갠다(위 "스프라이트에 Transform 스케일을 걸지 않는다").
+      그래서 **알파만** 떨어뜨린다
+    - **속도도 안 건드린다.** 죽는 순간의 넉백을 그대로 안고 날아가다 `Health`가 깎아 멈춘다 —
+      세게 맞아 죽으면 멀리 날아가는 것이 코드 없이 성립한다
+    - **몸 콜라이더는 남기고 히트박스만 끈다.** 시체가 계속 때리면 안 되지만, 콜라이더까지
+      끄면 날아간 시체가 땅을 뚫고 떨어진다. 다시 맞는 것은 `Health`가 막는다(죽은 대상의
+      `TakeDamage`는 false)
+    - **`Health.destroyOnDeath`를 꺼야 한다.** 켜져 있으면 `Died` 직후 `Destroy`가 걸려
+      **코루틴 호스트가 같이 죽어 페이드가 한 프레임도 안 돈다.** 베이스 프리팹에서 껐다
+    - `EnemyConfig.deathTime` 0.35. `Time.deltaTime`으로 세므로 마지막 타격의 히트스톱
+      동안에는 페이드도 같이 멈춘다 — 정지 중에 시체만 옅어지면 정지가 풀린 것처럼 보인다
+    - 실측 (timeScale 0.01): 치명타 → `Dead` / 히트박스 즉시 off / 알파 1.00 → 0.83 → 0.65,
+      x 492.92 → 493.68 → 494.29, 속도 (14,4) → (11.6,3.4) → (9.2,2.8)로 감쇠 → 파괴(7기 → 6기)
+  - ⏸ **Phase 3 남은 것** — 보스
 
 - **화면 떨림 해결 + 테스트 맵 전면 개편** (2026-09-08) — Play 모드 실측 검증
   - `CameraPixelLock`(CinemachineExtension, `Code/World/`) — 픽셀 퍼펙트 떨림의 실제 원인과 해법.
