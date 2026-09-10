@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace Game.Player
 {
@@ -82,6 +82,13 @@ namespace Game.Player
         [Tooltip("슬라이드 출발 속도 (units/sec). maxSpeed보다 충분히 커야 '치고 나간다'는 느낌이 난다")]
         public float dashSpeed = 32f;
 
+        [Tooltip("슬라이드 진입에 필요한 최소 속도 (maxSpeed 대비 비율). 최고속도로 달리는 중에만 " +
+                 "슬라이드가 나가므로 '가속해서 붙은 속도를 쓴다'가 된다 — 제자리에서는 못 쓴다. " +
+                 "1을 그대로 쓰지 않는 이유는 경사다: 지면 흡착이 vx를 조금씩 흔들어서 " +
+                 "정확히 maxSpeed를 요구하면 램프 위에서 슬라이드가 씹힌다")]
+        [Range(0f, 1f)]
+        public float slideMinSpeedRatio = 0.95f;
+
         [Tooltip("슬라이드 중 마찰 감속도 (units/sec²). 속도가 maxSpeed까지 떨어지면 슬라이드가 끝난다. " +
                  "고정 지속 시간은 없고 이 값이 슬라이드 길이를 정한다")]
         public float dashDecel = 50f;
@@ -104,7 +111,7 @@ namespace Game.Player
         [Tooltip("이 수평 속도 이상이면 무적이다 (units/sec). 무적을 슬라이드 '상태'가 아니라 " +
                  "'속도'로 판정한다 — 슬라이드는 마찰·발판 이탈·점프·내리막 종료로 예고 없이 끝나는데, " +
                  "속도는 서서히 줄기만 하므로 무적이 절벽처럼 사라지지 않는다. " +
-                 "슬라이드로만 낼 수 있는 속도여야 하니 maxSpeed(9)보다 커야 한다 — " +
+                 "슬라이드로만 낼 수 있는 속도여야 하니 maxSpeed보다 커야 한다 — " +
                  "작게 잡으면 그냥 걷기만 해도 무적이 된다")]
         public float invincibleSpeed = 12f;
 

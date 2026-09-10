@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 using Game.Combat;
 
@@ -80,6 +80,14 @@ namespace Game.Player
         /// </summary>
         public bool AtSlideSpeed => Mathf.Abs(_rb.linearVelocity.x) >= config.invincibleSpeed
                                     && (_health == null || !_health.IsKnockedBack);
+
+        /// <summary>
+        /// 슬라이드를 시작할 수 있는 속도인가. 최고속도로 달리는 중에만 나간다 —
+        /// 슬라이드가 "가속해서 번 속도를 쓰는 것"이 되고, 제자리에서 튀어나가는 이동기가 아니게 된다.
+        /// 모멘텀을 안고 착지한 경우(vx > maxSpeed)도 당연히 통과하므로 연계는 그대로다.
+        /// </summary>
+        public bool CanStartSlide => Mathf.Abs(_rb.linearVelocity.x)
+                                     >= config.maxSpeed * config.slideMinSpeedRatio;
 
         /// <summary>쌓인 과열 스택. HUD와 디버그 표시가 읽는다.</summary>
         public int Heat => _heat;
@@ -327,7 +335,7 @@ namespace Game.Player
             if (!_isSliding) _dashCooldownTimer -= Time.fixedDeltaTime;
 
             if (!_isSliding && !Overheated && _dashBufferTimer > 0f && _isGrounded
-                && _dashCooldownTimer <= 0f)
+                && _dashCooldownTimer <= 0f && CanStartSlide)
             {
                 _dashBufferTimer = 0f;
                 _isSliding = true;
