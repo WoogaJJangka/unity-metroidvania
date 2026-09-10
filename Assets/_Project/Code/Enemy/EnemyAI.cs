@@ -41,6 +41,7 @@ namespace Game.Enemy
         private Transform _target;
         private float _facing = -1f;
         private float _fireTimer;
+        private float _hitstunTimer;   // 넉백이 멎은 뒤 남은 경직 시간
 
         private void Awake()
         {
@@ -51,8 +52,17 @@ namespace Game.Enemy
         }
 
         // 이벤트 구독은 OnEnable, 해제는 OnDisable에서 짝을 맞춘다 (CLAUDE.md 규칙).
-        private void OnEnable() => _health.Died += OnDied;
-        private void OnDisable() => _health.Died -= OnDied;
+        private void OnEnable()
+        {
+            _health.Died += OnDied;
+            _health.Damaged += OnDamaged;
+        }
+
+        private void OnDisable()
+        {
+            _health.Died -= OnDied;
+            _health.Damaged -= OnDamaged;
+        }
 
         // 플레이어는 Awake가 아니라 Start에서 찾는다. Awake 순서는 보장되지 않지만
         // 모든 Awake는 모든 Start보다 먼저 돈다.
@@ -63,7 +73,54 @@ namespace Game.Enemy
             else Debug.LogWarning($"[EnemyAI] '{name}'이 플레이어를 찾지 못했습니다. 순찰만 합니다.", this);
         }
 
-        private void OnDied() => State = EnemyState.Dead;
+        /// <summary>
+        /// 사망 연출. 별도 컴포넌트로 빼지 않는다 — 이미 Died를 듣고 있고 config도 여기 있다.
+        ///
+        /// <b>스케일은 건드리지 않는다.</b> 픽셀 아트에서 비정수 배율은 스프라이트를 뭉갠다
+        /// (CLAUDE.md 규칙). 그래서 줄어들며 사라지는 대신 알파만 떨어뜨린다.
+        ///
+        /// 속도도 안 건드린다. 죽는 순간의 넉백을 그대로 안고 날아가다 Health가 깎아
+        /// 멈추므로, 세게 맞아 죽으면 멀리 날아가는 것이 저절로 성립한다.
+        /// </summary>
+        private void OnDied()
+        {
+            State = EnemyState.Dead;   // FixedUpdate가 이걸 보고 스스로 멈춘다
+
+            // 시체가 계속 때리면 안 된다. 몸 콜라이더는 남긴다 — 날아간 시체가 땅에 내려앉아야 한다.
+            // (다시 맞는 것은 Health가 막는다. 죽은 대상의 TakeDamage는 false를 돌려준다)
+            foreach (var hb in GetComponentsInChildren<Hitbox>()) hb.gameObject.SetActive(false);
+
+            StartCoroutine(FadeOut());
+        }
+
+        private System.Collections.IEnumerator FadeOut()
+        {
+            var renderers = GetComponentsInChildren<SpriteRenderer>();
+            float t = 0f;
+
+            // deltaTime은 timeScale을 탄다. 마지막 타격의 히트스톱 동안에는 페이드도 같이
+            // 멈춰야 한다 — 정지 중에 시체만 혼자 옅어지면 정지가 풀린 것처럼 보인다.
+            while (t < config.deathTime)
+            {
+                t += Time.deltaTime;
+                float alpha = 1f - t / config.deathTime;
+                foreach (var r in renderers)
+                {
+                    // 파괴된 UnityEngine.Object에 ?. 를 쓰면 안 된다 (CLAUDE.md 규칙).
+                    if (r == null) continue;
+                    Color c = r.color;
+                    c.a = alpha;
+                    r.color = c;
+                }
+                yield return null;
+            }
+
+            Destroy(gameObject);
+        }
+
+        // 경직은 맞는 즉시 채우고 넉백이 멎은 뒤부터 줄인다. 그래야 "밀려나다가 멈춰서
+        // 잠깐 굳는다"가 되고, 벽에 부딪혀 넉백이 일찍 끝나도 굳는 시간은 그대로다.
+        private void OnDamaged(DamageInfo info) => _hitstunTimer = config.hitstun;
 
         // 물리는 FixedUpdate에서 처리한다 (CLAUDE.md 규칙).
         private void FixedUpdate()
@@ -77,6 +134,17 @@ namespace Game.Enemy
                 State = EnemyState.Hurt;
                 return;
             }
+
+            // 넉백이 멎은 뒤에도 잠깐 못 움직인다. 이 틈이 밀치기 -> 슬라이드 연계의 자리다.
+            // 없으면 밀려나기를 끝내는 순간 chaseSpeed로 되붙어서, 거리를 벌어도 쓸 틈이 없다.
+            if (_hitstunTimer > 0f)
+            {
+                _hitstunTimer -= Time.fixedDeltaTime;
+                State = EnemyState.Hurt;
+                Move(0f);
+                return;
+            }
+
             if (State == EnemyState.Hurt) State = EnemyState.Chase;   // 맞았으면 때린 쪽을 쫓는다
 
             // 대상이 없으면 거리를 무한으로 봐서 자연히 순찰로 떨어진다.

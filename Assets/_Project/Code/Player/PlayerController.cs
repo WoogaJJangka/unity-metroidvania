@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 using Game.Combat;
 
@@ -42,6 +42,8 @@ namespace Game.Player
         private float _dashDir;
         private bool _wasDescending;     // 이번 슬라이드 중 내리막(grade&lt;0)을 탄 적이 있는가
         private Vector2 _groundNormal = Vector2.up;   // 발밑 지면의 법선. 평지면 (0,1)
+        private int _heat;               // 쌓인 과열 스택
+        private float _heatTimer;        // 다음 스택까지(+) / 다음 회복까지(-) 남은 시간
 
         // 접촉면 조회용. 매 프레임 새로 만들면 쓰레기가 쌓이므로 미리 잡아둔다.
         private readonly ContactPoint2D[] _contactBuf = new ContactPoint2D[8];
@@ -57,6 +59,55 @@ namespace Game.Player
         public bool IsGrounded => _isGrounded;
         public Vector2 Velocity => _rb.linearVelocity;
         public bool IsDashing => _isSliding;
+
+        /// <summary>
+        /// 슬라이드의 공방 판정이 살아 있는가. 기준은 슬라이드 '상태'가 아니라 <b>수평 속도</b>다 —
+        /// 빠르면 때리고 안 맞고, 느려지면 둘 다 꺼진다. 무적과 히트박스가 같은 값을 읽으므로
+        /// "안 맞는데 못 때리는" 구간이 생기지 않는다.
+        ///
+        /// 상태로 판정하면 슬라이드가 끝나는 순간(마찰·발판 이탈·점프·내리막 종료) 판정이
+        /// 절벽처럼 사라져 적을 뚫는 도중에 맞는다. 속도는 서서히 줄기만 하므로 그 경계가 없고,
+        /// 공중까지 자연히 이어진다.
+        ///
+        /// 넉백 중을 빼는 이유: 적의 몸통 넉백이 12로 임계값과 같아서, 맞고 밀려나는 것만으로
+        /// 판정이 켜져 때린 적을 되받아친다. 맞은 것이 공격이 되면 안 된다.
+        ///
+        /// 이 값을 <b>PlayerController가 직접</b> Health에 옮기는 이유는 타이밍이다.
+        /// 속도는 FixedUpdate에서 정해지는데 Unity는 FixedUpdate -> 물리 스텝(트리거 콜백)
+        /// -> Update 순으로 돈다. 무적을 Update에서 걸면 최대 2 물리 스텝(100Hz/60fps 기준 20ms)
+        /// 늦고, 그동안 적의 몸통 히트박스는 매 스텝 때린다 —
+        /// "적이 붙었을 때 슬라이드로 빠져나간다"가 바로 그 경우다.
+        /// </summary>
+        public bool AtSlideSpeed => Mathf.Abs(_rb.linearVelocity.x) >= config.invincibleSpeed
+                                    && (_health == null || !_health.IsKnockedBack);
+
+        /// <summary>
+        /// 슬라이드를 시작할 수 있는 속도인가. 최고속도로 달리는 중에만 나간다 —
+        /// 슬라이드가 "가속해서 번 속도를 쓰는 것"이 되고, 제자리에서 튀어나가는 이동기가 아니게 된다.
+        /// 모멘텀을 안고 착지한 경우(vx > maxSpeed)도 당연히 통과하므로 연계는 그대로다.
+        /// </summary>
+        public bool CanStartSlide => Mathf.Abs(_rb.linearVelocity.x)
+                                     >= config.maxSpeed * config.slideMinSpeedRatio;
+
+        /// <summary>쌓인 과열 스택. HUD와 디버그 표시가 읽는다.</summary>
+        public int Heat => _heat;
+
+        /// <summary>과열 한계 스택 수. 0이면 과열이 꺼져 있다.</summary>
+        public int HeatMax => config.heatMaxStacks;
+
+        /// <summary>
+        /// 과열로 슬라이드가 막혀 있는가. 스택이 가득 찼는지만 보면 되므로 따로 기억하지 않는다 —
+        /// 한 칸이 식는 순간이 곧 해제라 "얼마나 식어야 풀리는가"(히스테리시스)가 공짜로 딸려온다.
+        /// 게이지였을 때는 한계에서 곧바로 풀려 한 프레임짜리 슬라이드 → 즉시 재과열이 반복됐다.
+        /// </summary>
+        public bool Overheated => config.heatMaxStacks > 0 && _heat >= config.heatMaxStacks;
+
+        /// <summary>
+        /// 지형이 과열 생성량에 곱하는 값. 물웅덩이는 0(안 쌓인다), 뜨거운 지대는 2 이상.
+        /// <see cref="Game.World.HeatZone"/>이 드나들 때 바꾼다. 냉각 속도는 안 건드린다 —
+        /// 기획서의 예시가 "생성량 조정"이고, 안 쌓이는 것만으로 물웅덩이는 이미 쉼터가 된다.
+        /// </summary>
+        public float HeatRateMultiplier { get; set; } = 1f;
 
         /// <summary>마지막으로 바라본 방향 (+1 오른쪽 / -1 왼쪽). 공격 방향이 이 값을 쓴다.</summary>
         public float Facing => _facing;
@@ -100,7 +151,13 @@ namespace Game.Player
         }
 
         private void OnEnable() => _playerMap?.Enable();
-        private void OnDisable() => _playerMap?.Disable();
+
+        private void OnDisable()
+        {
+            _playerMap?.Disable();
+            // 슬라이드 도중에 꺼지면 무적이 켜진 채로 남는다. 켠 쪽이 끈다.
+            if (_health != null) _health.Invincible = false;
+        }
 
         private void OnDestroy()
         {
@@ -150,6 +207,17 @@ namespace Game.Player
             ApplyHorizontal();
             ApplyGravity();
             CorrectCorner();
+
+            // ponytail: Health.Invincible의 유일한 기록자가 슬라이드라고 가정한다. 나중에
+            // 다른 무적(리스폰, 과열 잠금)이 생기면 매 스텝 여기서 덮이므로 카운터로 바꿀 것.
+            // 속도가 다 확정된 뒤, 이 프레임의 물리 스텝(트리거 콜백)보다 먼저 건다.
+            // 여기가 아니라 Update에서 걸면 슬라이드 시작이 무적보다 최대 2 물리 스텝 앞서
+            // 나가고, 그동안 적의 몸통 히트박스에 그대로 맞는다.
+            if (_health != null) _health.Invincible = AtSlideSpeed;
+
+            // 과열도 속도가 다 정해진 뒤에 센다. AtSlideSpeed가 기준이므로 무적·히트박스와
+            // 같은 값 하나를 본다 — "빠른 동안 달아오른다"가 세 시스템에서 같은 뜻이 된다.
+            UpdateHeat();
         }
 
         private void UpdateGrounded()
@@ -266,12 +334,20 @@ namespace Game.Player
         {
             if (!_isSliding) _dashCooldownTimer -= Time.fixedDeltaTime;
 
-            if (!_isSliding && _dashBufferTimer > 0f && _isGrounded && _dashCooldownTimer <= 0f)
+            if (!_isSliding && !Overheated && _dashBufferTimer > 0f && _isGrounded
+                && _dashCooldownTimer <= 0f && CanStartSlide)
             {
                 _dashBufferTimer = 0f;
                 _isSliding = true;
                 _dashDir = _facing;
                 _wasDescending = false;
+
+                // 넉백은 여기서 끝난다. 아래에서 속도를 우리가 정하기 시작하므로
+                // Health는 더 이상 그 속도를 0까지 깎을 수 없고, 그러면 넉백 상태가
+                // 슬라이드 내내 붙어 있는다 — IsKnockedBack이 true인 동안은
+                // AtSlideSpeed가 false라 무적·히트박스·과열이 전부 죽는다.
+                // 증상은 "맞고 나서 슬라이드하면 과열이 안 쌓이고 적도 못 뚫는다"였다.
+                if (_health != null) _health.EndKnockback();
 
                 // 여기가 모멘텀 체이닝의 핵심. 슬라이드 점프로 얻은 속도를 안고 착지해
                 // 다시 슬라이드하면 dashSpeed로 깎이는 게 아니라 그 속도가 그대로 이어진다.
@@ -321,6 +397,48 @@ namespace Game.Player
         {
             _isSliding = false;
             _dashCooldownTimer = config.dashCooldown;
+        }
+
+        /// <summary>
+        /// 과열. 무한 슬라이딩을 막는 유일한 제동 장치다(기획서 "자원관리").
+        ///
+        /// 쌓는 기준은 슬라이드 '상태'가 아니라 <see cref="AtSlideSpeed"/>다. 상태로 세면
+        /// 슬라이드 → 점프 → 슬라이드 연계의 공중 구간이 공짜가 된다 — 그동안에도 무적이고
+        /// 적을 때린다. 이득 보는 구간과 대가 치르는 구간이 어긋나면 자원이 아니다.
+        ///
+        /// 타이머 하나가 양쪽을 다 센다. 빠르면 올라가고 아니면 내려가다 양 끝에서 스택을
+        /// 하나 옮기고 0으로 돌아간다. 게이지처럼 조금씩 새는 값이 아니라 칸이 통째로
+        /// 오가야 "몇 번 더 슬라이드할 수 있는가"를 셀 수 있다.
+        /// </summary>
+        private void UpdateHeat()
+        {
+            if (config.heatMaxStacks <= 0) return;   // 0이면 과열 자체가 꺼진 것
+
+            bool hot = AtSlideSpeed;
+            if (!hot && _heat <= 0) { _heatTimer = 0f; return; }   // 다 식었으면 셀 것이 없다
+
+            // 지형 배수는 쌓는 쪽에만 곱한다. 물웅덩이(0)에서는 타이머가 아예 안 흐르고,
+            // 뜨거운 지대(3)에서는 세 배로 흐른다. 식는 속도는 지형과 무관하다.
+            _heatTimer += hot
+                ? Time.fixedDeltaTime * HeatRateMultiplier
+                : -Time.fixedDeltaTime;
+
+            if (_heatTimer >= config.heatPerStack)
+            {
+                _heatTimer = 0f;
+                if (_heat < config.heatMaxStacks) _heat++;
+
+                // 한 칸을 채우며 가득 찼으면 달리던 슬라이드도 여기서 끊는다. 안 끊으면
+                // 긴 내리막 하나로 한계를 넘긴 채 끝까지 미끄러져 "막힌다"가 체감되지 않는다.
+                // 속도는 안 건드린다 — 번 모멘텀은 momentumDecel로 자연스럽게 빠진다.
+                // 의족이 지친 것이지 벽에 부딪힌 게 아니다.
+                if (Overheated && _isSliding) EndSlide();
+            }
+            else if (_heatTimer <= -config.heatRecoverTime)
+            {
+                _heatTimer = 0f;
+                _heat--;
+            }
         }
 
         private void ApplyHorizontal()

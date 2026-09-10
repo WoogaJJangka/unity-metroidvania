@@ -12,10 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d1654f89e9918954092376e8d1a730a5, type: 3}
   m_Name: MovementConfig
   m_EditorClassIdentifier: Assembly-CSharp::Game.Player.MovementConfig
-  maxSpeed: 9
-  groundAccel: 110
+  maxSpeed: 12
+  groundAccel: 40
   groundDecel: 60
-  airAccel: 100
+  airAccel: 35
   airDecel: 40
   turnAccelMultiplier: 2
   jumpHeight: 3.2
@@ -32,10 +32,15 @@ MonoBehaviour:
   groundCheckOffset: 0.02
   groundStickSpeed: 2
   dashSpeed: 32
+  slideMinSpeedRatio: 0.95
   dashDecel: 50
   momentumDecel: 12
   groundMomentumDecel: 35
   dashCooldown: 0.15
+  invincibleSpeed: 16
+  heatMaxStacks: 4
+  heatPerStack: 0.32
+  heatRecoverTime: 1
   maxSlopeAngle: 50
   slopeDashBonus: 45
   slopeDashAccel: 110

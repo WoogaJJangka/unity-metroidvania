@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace Game.Player
 {
@@ -82,6 +82,13 @@ namespace Game.Player
         [Tooltip("슬라이드 출발 속도 (units/sec). maxSpeed보다 충분히 커야 '치고 나간다'는 느낌이 난다")]
         public float dashSpeed = 32f;
 
+        [Tooltip("슬라이드 진입에 필요한 최소 속도 (maxSpeed 대비 비율). 최고속도로 달리는 중에만 " +
+                 "슬라이드가 나가므로 '가속해서 붙은 속도를 쓴다'가 된다 — 제자리에서는 못 쓴다. " +
+                 "1을 그대로 쓰지 않는 이유는 경사다: 지면 흡착이 vx를 조금씩 흔들어서 " +
+                 "정확히 maxSpeed를 요구하면 램프 위에서 슬라이드가 씹힌다")]
+        [Range(0f, 1f)]
+        public float slideMinSpeedRatio = 0.95f;
+
         [Tooltip("슬라이드 중 마찰 감속도 (units/sec²). 속도가 maxSpeed까지 떨어지면 슬라이드가 끝난다. " +
                  "고정 지속 시간은 없고 이 값이 슬라이드 길이를 정한다")]
         public float dashDecel = 50f;
@@ -100,6 +107,29 @@ namespace Game.Player
 
         [Tooltip("대시가 끝난 뒤 다시 쓸 수 있을 때까지의 시간 (sec)")]
         public float dashCooldown = 0.15f;
+
+        [Tooltip("이 수평 속도 이상이면 무적이다 (units/sec). 무적을 슬라이드 '상태'가 아니라 " +
+                 "'속도'로 판정한다 — 슬라이드는 마찰·발판 이탈·점프·내리막 종료로 예고 없이 끝나는데, " +
+                 "속도는 서서히 줄기만 하므로 무적이 절벽처럼 사라지지 않는다. " +
+                 "슬라이드로만 낼 수 있는 속도여야 하니 maxSpeed보다 커야 한다 — " +
+                 "작게 잡으면 그냥 걷기만 해도 무적이 된다")]
+        public float invincibleSpeed = 12f;
+
+        [Header("과열 — 슬라이드 자원")]
+        [Tooltip("과열 스택 수. 이만큼 쌓이면 슬라이드가 막힌다. 0이면 과열이 통째로 꺼진다. " +
+                 "게이지(0~1)가 아니라 칸으로 두는 이유는 '몇 번 더 슬라이드할 수 있는가'가 " +
+                 "한눈에 보여야 하기 때문 — 서서히 줄어드는 막대는 그 수를 세게 해주지 않는다")]
+        public int heatMaxStacks = 4;
+
+        [Tooltip("슬라이드 판정 속도(invincibleSpeed) 이상으로 이만큼 달리면 1스택이 쌓인다 (sec). " +
+                 "평지 슬라이드 한 번이 딱 0.4초라 기본값은 '슬라이드 1회 = 1스택'이다. " +
+                 "긴 내리막은 그만큼 여러 칸을 먹는다 — 시간으로 세야 오래 빠른 것이 대가를 치른다")]
+        public float heatPerStack = 0.4f;
+
+        [Tooltip("판정 속도 아래로 떨어진 뒤 1스택이 식는 시간 (sec). " +
+                 "가득 찬 뒤 다시 슬라이드할 수 있게 되기까지가 정확히 이 시간이다 — " +
+                 "스택이 하나 비는 순간이 곧 잠금 해제라 '얼마나 식어야 풀리는가'를 따로 둘 필요가 없다")]
+        public float heatRecoverTime = 1f;
 
         [Header("경사")]
         [Tooltip("걸어 올라갈 수 있는 최대 경사각 (도). 이보다 가파르면 경사로 취급하지 않아 " +

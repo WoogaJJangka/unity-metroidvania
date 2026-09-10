@@ -17,7 +17,17 @@ namespace Game.EditorTools
     public static class TestMapBuilder
     {
         // ── 구간 경계 (x) ──
-        const float Z1 = 0f, Z2 = 82f, Z3 = 202f, Z4 = 322f, Z5 = 484f, END = 580f;
+        const float Z1 = 0f, Z2 = 82f, Z3 = 202f, Z4 = 322f, Z5 = 484f, END = 648f;
+
+        // ── Zone5 경사 시험 레인 ──
+        // 8칸 45도 언덕에서 내려와 정지 더미 3기를 차례로 스친다. 속도 비례 피해를 재는 곳이라
+        // 더미 간격이 곧 측정 지점이다 — 내리막을 벗어난 뒤 groundMomentumDecel(35)로 깎이므로
+        // v² = v0² - 2 x 35 x 거리. 진입 46 기준 대략 45 / 36 / 22 에서 맞는다.
+        const float LaneX0 = 578f;                // 레인 왼쪽 끝 (아레나와 2유닛 틈)
+        const float LaneRampUp = 582f;            // 오르막 낮은 끝
+        const float LaneFoot = LaneRampUp + 24f;  // 내리막이 평지에 닿는 x (= 606)
+        const float LaneX1 = 646f;
+        static readonly float[] DummyOffsets = { 2f, 12f, 24f };
 
         const float FloorTop = 0f;       // 주 바닥 윗면
         const float FloorThick = 12f;    // 화면 아래로 뚫고 나갈 만큼. 바닥이 공중에 뜬 판자로 안 보이게 한다
@@ -30,6 +40,8 @@ namespace Game.EditorTools
         static readonly Color C5 = new Color(0.40f, 0.24f, 0.26f);      // 적
         static readonly Color CDeep = new Color(0.16f, 0.17f, 0.20f);   // 회수 바닥
         static readonly Color CProp = new Color(0.46f, 0.48f, 0.52f);   // 장애물
+        static readonly Color CWater = new Color(0.25f, 0.55f, 0.85f, 0.45f);  // 냉각 지형
+        static readonly Color CHot = new Color(0.90f, 0.35f, 0.15f, 0.45f);    // 가열 지형
 
         static Sprite _white;
         static Sprite _block;    // 윗면 + 좌우 벽면에 테두리. 밑면은 열려 있다
@@ -132,6 +144,23 @@ namespace Game.EditorTools
 
             // 뛰면 머리를 박는 복도. '점프하지 말고 달려서 통과' 시험.
             Box(g, "LowCeiling", 311.5f, 3.5f, 13f, 1f, CProp);
+
+            // 과열 지형. 활주로 위에 나란히 둬서 같은 속도로 지나며 차이를 본다.
+            HeatZoneBox(g, "WaterPool", 214f, 8f, 0f, CWater);   // 안 쌓인다 = 쉼터
+            HeatZoneBox(g, "HotZone", 228f, 8f, 3f, CHot);       // 세 배로 쌓인다
+        }
+
+        /// <summary>과열 배수를 바꾸는 구역. 콜라이더는 트리거라 달리는 데 방해가 없다.</summary>
+        static void HeatZoneBox(Transform parent, string name, float x0, float w, float mul, Color c)
+        {
+            var go = Box(parent, name, x0 + w * 0.5f, 2f, w, 4f, c, false, false);
+            go.GetComponent<SpriteRenderer>().sortingOrder = -2;   // 지형 뒤, 바닥 앞
+            go.AddComponent<BoxCollider2D>().isTrigger = true;
+
+            // rateMultiplier는 private [SerializeField]다. SerializedObject로 쓴다.
+            var so = new SerializedObject(go.AddComponent<Game.World.HeatZone>());
+            so.FindProperty("rateMultiplier").floatValue = mul;
+            so.ApplyModifiedProperties();
         }
 
         static void Zone4Slope()
@@ -168,6 +197,21 @@ namespace Game.EditorTools
             Box(g, "ShooterDeck", 517f, 1.5f, 10f, 3f, C5);
             Box(g, "Cover_L", 496.5f, 1f, 1f, 2f, CProp);
             Box(g, "Cover_R", 545.5f, 1f, 1f, 2f, CProp);
+
+            // ── 경사 시험 레인 ──
+            // 아레나와 2유닛 틈을 둔다. 적은 발밑 낭떠러지에서 돌아서므로 레인으로 넘어오지 않는다.
+            Floor(g, "SlopeLane", LaneX0, LaneX1, FloorTop, C5);
+            Ramp(g, "LaneRampUp_8", LaneRampUp, 0f, 8f, true, C5);
+            Box(g, "LaneDeck", LaneRampUp + 12f, 3f, 8f, 10f, C5, true, true, false);
+            Ramp(g, "LaneRampDown_8", LaneRampUp + 16f, 8f, 8f, false, C5);
+
+            // 램프가 바닥 조각의 끝면에 맞닿는 자리. 안 덮으면 벽면 타일이 언덕 속에 세로로 남는다.
+            CapFloorEdge(Mathf.RoundToInt(LaneX0), 0);
+
+            // 걸어서 오면 한참이다. 숫자키 6으로 바로 온다 (DebugWarp가 ZoneStart_N을 찾는다).
+            var stop = new GameObject("ZoneStart_6");
+            stop.transform.SetParent(g, false);
+            stop.transform.localPosition = new Vector3(LaneX0 + 2f, 1.5f, 0f);
         }
 
         // ─────────────────────────── 표식과 배우 ───────────────────────────
@@ -192,35 +236,83 @@ namespace Game.EditorTools
             }
         }
 
+        /// <summary>
+        /// 어떤 적이 어디에 서는가. 굽기가 이 표대로 프리팹을 심는다.
+        /// 적을 늘리거나 옮기려면 씬이 아니라 여기를 고친다.
+        /// </summary>
+        static readonly (string prefab, float x, float y)[] EnemySpots =
+        {
+            // 콜라이더가 1x1 중심이라 바닥 윗면 + 0.5가 정확한 안착 높이다.
+            ("Enemy_Chaser",  Z5 + 8f, 0.5f),
+            ("Enemy_Chaser",  556f,    0.5f),
+            ("Enemy_Shooter", 517f,    3.5f),   // ShooterDeck 윗면 y=3
+            ("Enemy_Shooter", 570f,    0.5f),
+        };
+
         static void PlaceActors()
         {
             // 플레이어와 포털은 1구간에, 적은 5구간에 둔다.
             Move("Player", new Vector3(Z1 + 3f, 1.5f, 0f));
             Move("SpawnPoint_from_B", new Vector3(Z1 + 6f, 1f, 0f));
             Move("Portal_to_B", new Vector3(Z2 - 6f, 1f, 0f));
+            RestoreCamera();
 
             var enemies = GameObject.Find("/Enemies");
-            if (enemies == null) return;
+            if (enemies == null) enemies = new GameObject("Enemies");
 
-            // 이전에 구운 사본을 지운다. 다시 구울 때마다 쌓이면 안 된다.
+            // 지형과 똑같이 통째로 비우고 다시 심는다. 예전에는 씬에 손으로 놔둔 원본 2기를
+            // 찾아 복제했는데, 그러면 원본이 사라지는 순간 굽기가 조용히 아무것도 안 했다.
             for (int i = enemies.transform.childCount - 1; i >= 0; i--)
-            {
-                var c = enemies.transform.GetChild(i).gameObject;
-                if (c.name.EndsWith("(clone)")) Object.DestroyImmediate(c);
-            }
+                Object.DestroyImmediate(enemies.transform.GetChild(i).gameObject);
 
-            var chaser = GameObject.Find("/Enemies/Enemy_Chaser");
-            var shooter = GameObject.Find("/Enemies/Enemy_Shooter");
-            if (chaser == null || shooter == null) return;
+            foreach (var spot in EnemySpots)
+                SpawnEnemy(spot.prefab, spot.x, spot.y, enemies.transform);
 
-            // 콜라이더가 1x1 중심이라 바닥 윗면 + 0.5가 정확한 안착 높이다.
-            chaser.transform.position = new Vector3(Z5 + 8f, 0.5f, 0f);
-            shooter.transform.position = new Vector3(517f, 3.5f, 0f);   // ShooterDeck 윗면 y=3
+            // 정지 더미. 속도 비례 피해를 재려면 대상이 안 움직여야 한다 —
+            // 움직이는 적은 어느 속도에서 맞았는지 알 수가 없다.
+            foreach (float offset in DummyOffsets)
+                SpawnEnemy("Enemy_Dummy", LaneFoot + offset, 0.5f, enemies.transform);
 
-            var c2 = Object.Instantiate(chaser, new Vector3(556f, 0.5f, 0f), Quaternion.identity, enemies.transform);
-            c2.name = "Enemy_Chaser_2(clone)";
-            var s2 = Object.Instantiate(shooter, new Vector3(570f, 0.5f, 0f), Quaternion.identity, enemies.transform);
-            s2.name = "Enemy_Shooter_2(clone)";
+            // 속도 비례 피해는 눈에 안 보인다. 체력 UI가 생기기 전까지 이 표시가 대신한다.
+            var tools = GameObject.Find("DebugTools");
+            if (tools != null && tools.GetComponent<Game.Utils.DebugStats>() == null)
+                tools.AddComponent<Game.Utils.DebugStats>();
+        }
+
+        /// <summary>
+        /// 적 프리팹 한 기를 심는다. <b>복제(Instantiate)가 아니라 프리팹 인스턴스</b>다 —
+        /// 프리팹을 고치면 심어둔 적이 전부 따라온다. 복제본은 그 연결이 없어서
+        /// 히트박스 배선 하나를 고치려면 씬의 모든 적을 손으로 고쳐야 했다.
+        /// </summary>
+        static void SpawnEnemy(string prefabName, float x, float y, Transform parent)
+        {
+            string path = "Assets/_Project/Prefabs/Enemies/" + prefabName + ".prefab";
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (prefab == null) { Debug.LogError("[TestMapBuilder] 프리팹 없음: " + path); return; }
+
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+            go.transform.position = new Vector3(x, y, 0f);
+        }
+
+        /// <summary>
+        /// CinemachineBrain을 켜고 카메라를 vcam 자리로 되돌린다.
+        /// 에디트 모드에서 카메라를 옮겨 캡처하려면 브레인을 꺼야 하는데(안 그러면 vcam이
+        /// 도로 끌고 간다), 그걸 되돌리지 않은 채 씬을 저장하면 <b>플레이해도 카메라가
+        /// 그 자리에 그대로 멈춰 있다.</b> 증상은 "캐릭터가 안 보이고 화면이 고정"이다.
+        /// 실제로 한 번 이렇게 커밋됐다. 굽기가 씬의 원본이므로 여기서 매번 되돌린다.
+        /// </summary>
+        static void RestoreCamera()
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+
+            var brain = cam.GetComponent<Unity.Cinemachine.CinemachineBrain>();
+            if (brain != null) brain.enabled = true;
+
+            var vcam = Object.FindAnyObjectByType<Unity.Cinemachine.CinemachineCamera>();
+            if (vcam != null)
+                cam.transform.position = new Vector3(vcam.transform.position.x,
+                                                     vcam.transform.position.y, -10f);
         }
 
         static void ClearTilemap()

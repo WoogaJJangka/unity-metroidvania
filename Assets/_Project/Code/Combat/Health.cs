@@ -49,6 +49,17 @@ namespace Game.Combat
         /// </summary>
         public bool IsKnockedBack => _knockedBack;
 
+        /// <summary>
+        /// 넉백을 지금 끝낸다. <b>맞은 쪽이 스스로 속도를 정하기 시작했을 때</b> 부른다
+        /// (플레이어가 넉백 도중 슬라이드로 빠져나가는 경우).
+        ///
+        /// 없으면 안 되는 이유: 넉백은 지속 시간이 아니라 <b>속도가 0이 될 때까지</b>로 끝난다.
+        /// 그 사이 다른 시스템이 속도를 높게 유지하면 아래 FixedUpdate가 영영 0에 못 닿아
+        /// 넉백 상태가 그 시스템이 끝날 때까지 붙어 있는다. 실제로 넉백 중 슬라이드가
+        /// 그랬다 — 슬라이드 내내 IsKnockedBack이 true라 무적·히트박스·과열이 통째로 죽었다.
+        /// </summary>
+        public void EndKnockback() => _knockedBack = false;
+
         private void Awake()
         {
             _rb = GetComponent<Rigidbody2D>();

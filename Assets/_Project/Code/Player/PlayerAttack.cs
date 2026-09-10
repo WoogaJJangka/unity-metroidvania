@@ -11,6 +11,7 @@ namespace Game.Player
     ///
     /// 주 공격은 슬라이드다. 버튼이 아니라 PlayerController.IsDashing 상태가 켠다 —
     /// 이동과 공격이 같은 동작이라는 것이 이 게임의 차별점이라 공격 버튼을 따로 두지 않는다.
+    /// 슬라이드 무적은 여기가 아니라 PlayerController가 건다 — 물리 타이밍 때문이다.
     /// 보조 공격(Attack 버튼)은 피해가 아니라 <b>거리 확보</b>가 목적이다. 붙은 적을
     /// 밀어내 슬라이드로 들어갈 공간을 만든다. 그래서 damage는 낮고 knockbackSpeed는 높다.
     /// </summary>
@@ -34,7 +35,6 @@ namespace Game.Player
         public bool IsAttacking { get; private set; }
 
         private PlayerController _player;
-        private Health _health;            // 슬라이드 무적을 켜고 끌 대상. 없어도 동작한다
         private InputAction _attackAction;
         private float _cooldownTimer;
         private Vector3 _hitboxLocalPos;   // 오른쪽을 볼 때의 위치. 왼쪽이면 x를 뒤집는다
@@ -42,7 +42,6 @@ namespace Game.Player
         private void Awake()
         {
             _player = GetComponent<PlayerController>();
-            _health = GetComponent<Health>();   // 없으면 무적만 빠지고 나머지는 그대로 돈다
 
             if (hitbox == null)
             {
@@ -62,12 +61,6 @@ namespace Game.Player
                 slideHitbox.SetActive(false);
         }
 
-        // 슬라이드 중에 이 컴포넌트가 꺼지면 무적이 켜진 채로 남는다. 켠 쪽이 끈다.
-        private void OnDisable()
-        {
-            if (_health != null) _health.Invincible = false;
-        }
-
         // Awake가 아니라 Start에서 액션을 찾는 이유:
         // PlayerController가 Awake에서 입력 에셋 복사본을 만든다. 같은 오브젝트에 붙은
         // 컴포넌트끼리 Awake 순서는 보장되지 않지만, 모든 Awake는 모든 Start보다 먼저 돈다.
@@ -81,18 +74,17 @@ namespace Game.Player
         // 입력은 Update에서 읽는다 (CLAUDE.md 규칙).
         private void Update()
         {
-            // 주 공격: 슬라이드 상태를 그대로 히트박스에 옮긴다. 슬라이드에는 고정 지속 시간이
-            // 없으므로(마찰로 끝난다) 코루틴으로 흉내 내지 않고 상태를 매 프레임 따라간다.
-            // 켜지는 순간이 Hitbox의 "휘두르기 한 번" 경계가 되어, 한 슬라이드에 같은 적을
-            // 한 번만 때린다. 슬라이드가 끊겼다 다시 시작하면 다시 때릴 수 있다.
-            bool sliding = _player.IsDashing;
-            if (slideHitbox != null && slideHitbox.activeSelf != sliding)
-                slideHitbox.SetActive(sliding);
+            // 주 공격: 판정 기준은 슬라이드 '상태'가 아니라 속도다(PlayerController.AtSlideSpeed).
+            // 무적과 같은 값을 읽으므로 "안 맞는데 못 때리는" 구간이 없다 — 슬라이드 점프로
+            // 날아가는 동안에도 뚫으면서 때린다. 켜지는 순간이 Hitbox의 "휘두르기 한 번"
+            // 경계가 되어 한 번 빨라지는 동안 같은 적을 한 번만 때린다.
+            bool fast = _player.AtSlideSpeed;
+            if (slideHitbox != null && slideHitbox.activeSelf != fast)
+                slideHitbox.SetActive(fast);
 
-            // 공방일체: 슬라이드는 때리는 동시에 회피다. 켜고 끄는 주체가 여기인 이유는
-            // 이 컴포넌트가 이미 이동 상태와 전투를 둘 다 알기 때문 — Health에 이동을,
-            // PlayerController에 전투를 새로 물리지 않는다.
-            if (_health != null) _health.Invincible = sliding;
+            // 방어 절반(Health.Invincible)은 PlayerController가 건다. 속도가 FixedUpdate에서
+            // 정해지므로 여기(Update)에서 걸면 한 프레임 늦고, 그 사이 물리 스텝에서 맞는다.
+            // 자세한 이유는 AtSlideSpeed 주석 참고.
 
             _cooldownTimer -= Time.deltaTime;
 
